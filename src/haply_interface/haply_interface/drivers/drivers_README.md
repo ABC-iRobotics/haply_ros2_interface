@@ -38,9 +38,7 @@ Listens to real-time data streams from both devices:
      - Incoming command specifies a target position.  
      - The driver computes corrective forces using a **PID controller**:  
 
-        $
-        F = K_p \cdot e + K_i \int e \, dt - K_d \cdot v
-        $
+        $F = K_p \cdot e + K_i \int e \, dt - K_d \cdot v$
 
 
         where:
