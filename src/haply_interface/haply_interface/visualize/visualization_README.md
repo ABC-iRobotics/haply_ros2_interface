@@ -1,4 +1,9 @@
 # Visualization
+
+## Table of Contents
+- [rviz_visualization_node](#rviz_visualization_node)
+- [plotter_node](#plotter_node)
+
 ## `rviz_visualization_node`
 
 This node is responsible for **visualizing the Haply device in RViz**.  

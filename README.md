@@ -174,7 +174,7 @@ This is the main driver node responsible for managing **both** the Inverse3 and 
 To start the node, use the following command:
 
 ```bash
-ros2 run haply_interface haply_driver_node --ros-args -p frequency:=5.0
+ros2 run haply_interface haply_driver_node --ros-args -p frequency:=200.0
 ```
 
 ### `inverse3_driver_node`
@@ -184,7 +184,7 @@ This node is a dedicated ROS2 driver for the **Inverse3** device, allowing devel
 To start the node, use the following command:
 
 ```bash
-ros2 run haply_interface inverse3_driver_node --ros-args -p frequency:=5.0
+ros2 run haply_interface inverse3_driver_node --ros-args -p frequency:=200.0
 ```
 
 ### `handle_driver_node`
@@ -194,7 +194,7 @@ This node is a dedicated ROS2 driver for the **VerseGrip Stylus** (also referred
 To start the node, use the following command:
 
 ```bash
-ros2 run haply_interface handle_driver_node --ros-args -p frequency:=5.0
+ros2 run haply_interface handle_driver_node --ros-args -p frequency:=200.0
 ```
 
 ### Demo Nodes
