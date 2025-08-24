@@ -2,36 +2,6 @@
 
 This README contains detailed documentation for the available driver nodes including their functionality, published and subscribed topics, parameters, and usage instructions.
 
-
-## `haply_driver_node`
-
-This is the main driver node responsible for managing **both** the Inverse3 and the VerseGrip Stylus devices simultaneously. It performs the following key tasks:
-
-- Establishes a WebSocket connection with the `haply-inverse-service` running on the host machine.
-- Listens to real-time data streams from both devices, such as:
-  - Cursor position and velocity (Inverse3)
-  - Orientation and button states (VerseGrip Stylus)
-- Publishes this data to various ROS2 topics:
-  - `inverse3_state` (`haply_msgs/Inverse3State`)  
-    → Contains the current position and velocity of the Inverse3 cursor.
-  - `handle_state` (`haply_msgs/HandleState`)  
-    → Combines the orientation and buttons into a single message.
-  - `haply_state` (`haply_msgs/HaplyState`)  
-    → Unified topic containing the full state: position, velocity, orientation, and buttons.
-- Accepts force control commands on the following topic:
-  - `haply_force_command` (`haply_msgs/HaplyControl`)  
-    → Accepts desired force values (`x`, `y`, `z`) to be applied to the Inverse3 device.
-- Runs an internal timer that continuously updates all output topics at a configurable rate.
-- Logs uptime and device status on startup to the terminal.
-
-This node is useful when you want to interface with both devices simultaneously.
-
-To start the node, use the following command:
-
-```bash
-ros2 run haply_interface haply_driver_node --ros-args -p frequency:=200.0
-```
-
 ## `haply_driver_node`
 
 This is the main driver node responsible for managing **both** the Inverse3 and the VerseGrip Stylus devices simultaneously.  
@@ -68,20 +38,21 @@ Listens to real-time data streams from both devices:
      - Incoming command specifies a target position.  
      - The driver computes corrective forces using a **PID controller**:  
 
-        ![PID formula](https://latex.codecogs.com/svg.image?\color{white}%20F%20%3D%20K_p%20\cdot%20e%20%2B%20K_i%20\int%20e\cdot%20dt%20-%20K_d%20\cdot%20v)
+        $
+        F = K_p \cdot e + K_i \int e \, dt - K_d \cdot v
+        $
+
 
         where:
-          - `e = x_target - x` (position error)
-          - `v` is the measured velocity
-          - `Kp, Ki, Kd` are configurable controller gains
+          - $e = x_{target} - x$
+          - $v$ is the measured velocity
+          - $K_p, K_i, K_d$ are configurable controller gains
 
-
-
-     - Computed forces are **clamped** to the maximum allowed per-axis force.  
+     - Computed forces are clamped to the maximum allowed per-axis force.  
 
 - **Safety and timeouts**  
   - If no new force command is received within a configurable timeout, force output is set to zero.  
-  - If no devices are detected for 200 seconds, the node shuts down automatically.  
+  - If no devices are detected for 2 seconds, the node shuts down automatically.  
 
 - **Diagnostics and logging**  
   - Prints device information (ID, port, calibration, battery, readiness) at startup.  
@@ -91,12 +62,12 @@ Listens to real-time data streams from both devices:
 
 ### Parameters
 
-- `frequency` (default: `200.0`) → Publishing frequency [Hz]  
+- `frequency` (default: `200.0`) → State publishing frequency [Hz]  
 - `max_force` (default: `10.0`) → Maximum allowed per-axis force [N]  
 - PID gains (fixed in code, can be tuned):  
-  - `Kp = 30.0` [N/m]  
-  - `Ki = 5.0` [N/(m·s)]  
-  - `Kd = 0.9` [N·s/m]  
+  - $K_p = 30.0$ [N/m]  
+  - $K_i = 5.0$ [N/(m·s)]  
+  - $K_d = 0.9$ [N·s/m]  
 
 ---
 
@@ -105,7 +76,7 @@ Listens to real-time data streams from both devices:
 Run the driver node:
 
 ```bash
-ros2 run haply_interface haply_driver_node --ros-args -p frequency:=200.0 -p max_force:=15.0
+ros2 run haply_interface haply_driver_node --ros-args -p frequency:=200.0 -p max_force:=10.0
 ```
 
 ## `inverse3_driver_node`
