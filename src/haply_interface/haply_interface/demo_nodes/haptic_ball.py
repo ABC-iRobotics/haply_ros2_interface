@@ -10,20 +10,19 @@ from visualization_msgs.msg import Marker
 
 
 class HaplyForceController(Node):
-    """Node that calculates and applies haptic forces based on the HaplyState,
-    and publishes a scaled sphere marker to RViz for visualization."""
+    """Haptic ball demo"""
 
     def __init__(self):
         super().__init__("haptic_ball")
 
-        # --- Parameters ---
+        # Parameters 
         self.declare_parameter("stiffness", 200.0)  # Haptic stiffness
         self.declare_parameter("position_scale", 10.0)  # Visualization scale
 
         self.stiffness = float(self.get_parameter("stiffness").value)
         self.position_scale = float(self.get_parameter("position_scale").value)
 
-        # Virtual sphere (real-world coordinates, in meters)
+        # Virtual sphere
         self.sphere_center = [-0.07, -0.2, 0.2]
         self.sphere_radius = 0.08
 
@@ -68,7 +67,7 @@ class HaplyForceController(Node):
         )
 
     def compute_haptic_force(self, device_position):
-        """Force based on virtual sphere interaction (real coords, no scaling)"""
+        """Force based on virtual sphere interaction"""
 
         distance = math.sqrt(
             sum([(device_position[i] - self.sphere_center[i]) ** 2 for i in range(3)])

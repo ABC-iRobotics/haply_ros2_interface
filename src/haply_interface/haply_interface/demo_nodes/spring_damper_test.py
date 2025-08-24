@@ -17,7 +17,7 @@ class HaplyAutoControlPublisher(Node):
     def __init__(self):
         super().__init__('spring_damper_test')
 
-        # Parameters 
+        #  Parameters 
         self.declare_parameter("interval", 2.0)
         self.declare_parameter("plot_window", 30.0)
         self.declare_parameter("axis", 1)  # 1=x, 2=y, 3=z
