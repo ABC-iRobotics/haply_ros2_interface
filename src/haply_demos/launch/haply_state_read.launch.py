@@ -8,7 +8,7 @@ def generate_launch_description():
             executable='haply_driver_node',
             name='haply_driver_node',
             output='screen',
-            parameters=[{'frequency': 5.0}],
+            parameters=[{'frequency': 200.0}],
         ),
         Node(
             package='haply_interface',

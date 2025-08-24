@@ -8,7 +8,7 @@ def generate_launch_description():
         package="haply_interface",
         executable="haply_driver_node",
         name="haply_driver_node",
-        parameters=[{'publish_rate': 10.0}]
+        parameters=[{'frequency': 200.0}]
     )
 
     visualization_node = Node(
