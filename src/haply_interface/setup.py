@@ -28,7 +28,7 @@ setup(
 
             'target_position_sinus = haply_interface.demo_nodes.target_position_sinus:main',
             'target_position_input = haply_interface.demo_nodes.target_position_input:main',
-            'spring_damper_test = haply_interface.demo_nodes.spring_damper_test:main',
+            'PID_test = haply_interface.demo_nodes.PID_test:main',
             'haptic_ball = haply_interface.demo_nodes.haptic_ball:main',
             'haptic_ball_with_damping = haply_interface.demo_nodes.haptic_ball_with_damping:main',
             

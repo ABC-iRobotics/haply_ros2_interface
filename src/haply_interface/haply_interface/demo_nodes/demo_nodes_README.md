@@ -70,3 +70,37 @@ ros2 run haply_interface target_position_input
 ```bash
 0.03 -0.13 0.20
 ```
+
+## `haptic_ball`
+
+This ROS2 demo node implements a virtual haptic sphere interaction.  
+It continuously computes and applies forces to the Inverse3 device to simulate a spring-like boundary when the device enters the defined sphere volume.
+It also publishes a sphere marker to RViz (`visualization_marker`) so that the simulated ball is also visible in the 3D scene.
+
+**Parameters:**  
+- `stiffness` → Controls how strong the restoring force is when the device penetrates the sphere boundary (higher value = harder surface).  
+- `position_scale` → Scales the marker position and radius in RViz for better visibility (does not affect actual haptic behavior).  
+
+**Run:**  
+
+```bash
+ros2 run haply_interface haptic_ball --ros-args -p stiffness:=200.0 -p position_scale:=10.0
+```
+
+## `PID_test`
+
+This ROS2 node alternates between two predefined 3D positions and publishes them to the `haply_target` topic.  
+
+- Useful for testing position-based control and system response to step changes.  
+- Positions alternate at a configurable interval.  
+
+### Parameters
+- `interval` (default: `2.0`) → Time interval [s] between switching positions.  
+
+### Usage
+
+Run the node:
+
+```bash
+ros2 run haply_interface spring_damper_test --ros-args -p interval:=2.0
+```
