@@ -8,7 +8,8 @@ class TargetPublisherNode(Node):
     """ROS2 Node to publish sinusoidal target positions for Inverse3 control."""
     
     def __init__(self):
-        super().__init__('target_position_publisher')
+        super().__init__('target_position_sinus')
+
         self.publisher = self.create_publisher(HaplyControl, 'haply_target', 10)
         self.timer = self.create_timer(0.01, self.publish_target)
         self.get_logger().info('Target Publisher Node initialized')

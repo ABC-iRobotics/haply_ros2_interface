@@ -9,7 +9,7 @@ class HaplyControlPublisher(Node):
     """ROS2 Node that publishes target positions to move the Haply device."""
 
     def __init__(self):
-        super().__init__('haply_control_publisher')
+        super().__init__('target_position_input')
 
         # Publisher for sending HaplyControl messages
         self.publisher = self.create_publisher(HaplyControl, 'haply_target', 10)

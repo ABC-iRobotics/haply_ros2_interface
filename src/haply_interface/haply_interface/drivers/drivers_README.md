@@ -2,6 +2,11 @@
 
 This README contains detailed documentation for the available driver nodes including their functionality, published and subscribed topics, parameters, and usage instructions.
 
+## Table of Contents
+- [haply_driver_node](#haply_driver_node)
+- [inverse3_driver_node](#inverse3_driver_node)
+- [handle_driver_node](#handle_driver_node)
+
 ## `haply_driver_node`
 
 This is the main driver node responsible for managing **both** the Inverse3 and the VerseGrip Stylus devices simultaneously.  
