@@ -17,7 +17,7 @@ class HaplyAutoControlPublisher(Node):
     def __init__(self):
         super().__init__('spring_damper_test')
 
-        # --- Parameters ---
+        # Parameters 
         self.declare_parameter("interval", 2.0)
         self.declare_parameter("plot_window", 30.0)
         self.declare_parameter("axis", 1)  # 1=x, 2=y, 3=z
@@ -41,11 +41,11 @@ class HaplyAutoControlPublisher(Node):
             self.axis = "x"
             self.extract_fn = lambda pos: float(pos.x)
 
-        # --- Pub/Sub ---
+        #  Pub/Sub 
         self.publisher = self.create_publisher(HaplyControl, 'haply_target', 10)
         self.create_subscription(Inverse3State, 'inverse3_state', self.inverse_state_callback, 10)
 
-        # --- Predefined positions (alternating) ---
+        #  Predefined positions (alternating) 
         self.positions = [
             Point(x=-0.08, y=-0.15, z=-0.03),
             Point(x= 0.23, y=-0.16, z=0.15),
@@ -69,7 +69,7 @@ class HaplyAutoControlPublisher(Node):
             f"Plotting '{self.axis}(t)' with ref lines {self.ref_lines}, window={self.plot_window:.1f}s."
         )
 
-    # ------------------ ROS logic ------------------
+    #  ROS logic 
 
     def publish_next_position(self):
         """Publish the next predefined target position."""
@@ -102,7 +102,7 @@ class HaplyAutoControlPublisher(Node):
                 self.t_buf.popleft()
                 self.val_buf.popleft()
 
-    # ------------------ Plotting ------------------
+    #  Plotting 
 
     def run_plot(self):
         """Run the live plotting loop in the main thread."""
