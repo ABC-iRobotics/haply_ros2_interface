@@ -8,7 +8,7 @@ from haply_msgs.msg import HaplyControl, Inverse3State
 import threading
 import time
 from collections import deque
-import matplotlib  # don't import pyplot here; do it in the main thread
+import matplotlib
 
 
 class HaplyAutoControlPublisher(Node):

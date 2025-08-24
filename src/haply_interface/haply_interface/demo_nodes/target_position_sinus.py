@@ -3,6 +3,8 @@ from rclpy.node import Node
 from geometry_msgs.msg import Point, Vector3
 from haply_msgs.msg import HaplyControl
 import math
+import sys
+import time
 
 class TargetPublisherNode(Node):
     """ROS2 Node to publish sinusoidal target positions for Inverse3 control."""
@@ -17,10 +19,12 @@ class TargetPublisherNode(Node):
         self.t = 0.0  # Time variable for sinusoidal motion
         self.magnitude = 0.1  # Amplitude of oscillation
 
+        self.start_time = time.time()
+
     def publish_target(self):
         """Publishes a sinusoidal target position message to HaplyControl."""
         msg = HaplyControl()
-        msg.use_position = True  # Ensure position control is used
+        msg.use_position = True
 
         # Set sinusoidal position motion
         msg.target_position = Point()
@@ -33,8 +37,12 @@ class TargetPublisherNode(Node):
 
         # Publish message
         self.publisher.publish(msg)
-        self.get_logger().info(f'Published target position: x={msg.target_position.x:.3f}, '
-                               f'y={msg.target_position.y:.3f}, z={msg.target_position.z:.3f}')
+        #self.get_logger().info(f'Published target position: x={msg.target_position.x:.3f}, f'y={msg.target_position.y:.3f}, z={msg.target_position.z:.3f}')
+
+        # Uptime print
+        elapsed_time = int(time.time() - self.start_time)
+        sys.stdout.write(f"\rhaply_driver_node is running: {elapsed_time} s")
+        sys.stdout.flush()
 
         # Increment time step
         self.t += 0.1  # Adjust for faster/slower oscillation
