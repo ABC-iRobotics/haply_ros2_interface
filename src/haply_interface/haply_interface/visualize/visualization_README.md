@@ -50,3 +50,50 @@ Run the visualization node:
 ```bash
 ros2 run haply_interface rviz_visualization_node --ros-args -p position_scale:=10.0 -p publish_frequency:=100.0
 ```
+
+## `plotter_node`
+
+A node that displays the commanded target position, the actual position, and the percentage error between them.
+
+---
+
+### Features
+
+- **Data sources**  
+This ROS2 node subscribes to both:
+  - `haply_target` (`haply_msgs/HaplyControl`) → the commanded target position 
+  - `haply_state` (`haply_msgs/HaplyState`) → the measured actual device position
+
+- **Real-time plotting**  
+  Displays six diagrams in a single window:  
+  - Left column → Actual vs Target position
+  - Right column → Percentage error  
+  - Row 1 → X-axis data  
+  - Row 2 → Y-axis data  
+  - Row 3 → Z-axis data  
+
+- **Percentage error calculation**  
+  Error is computed as:  
+
+  $$
+  \text{error}[\%] = \frac{x_{target} - x_{actual}}{x_{target}} \cdot 100
+  $$
+
+- **Rolling time window**  
+  Only keeps the most recent N seconds (configurable with `plot_window` parameter).  
+
+---
+
+### Parameters
+
+- `plot_window` (default: `30.0`) → Time window [s] for plotting  
+
+---
+
+### Usage
+
+Run the node:
+
+```bash
+ros2 run haply_interface plotter_node --ros-args -p plot_window:=30.0
+```

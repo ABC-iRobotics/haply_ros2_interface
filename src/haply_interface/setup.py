@@ -37,6 +37,7 @@ setup(
             'state_subscriber_handle = haply_interface.demo_nodes.state_subscriber_handle:main',
 
             'rviz_visualization_node = haply_interface.visualize.rviz_visualization_node:main',
+            'plotter_node = haply_interface.visualize.plotter_node:main',
         ],
     },
 )
