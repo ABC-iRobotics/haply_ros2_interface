@@ -1,11 +1,12 @@
-# `rviz_visualization_node`
+# Visualization
+## `rviz_visualization_node`
 
 This node is responsible for **visualizing the Haply device in RViz**.  
 It subscribes to the `haply_state` topic and publishes TF transforms and visualization markers for real-time display.  
 
 ---
 
-## Features
+### Features
 
 - **ROS2 subscription**  
   - `haply_state` (`haply_msgs/HaplyState`)  
@@ -25,14 +26,14 @@ It subscribes to the `haply_state` topic and publishes TF transforms and visuali
 
 ---
 
-## Parameters
+### Parameters
 
 - `position_scale` (default: `10.0`) → Multiplier applied to the incoming Haply position before visualization.  
 - `publish_frequency` (default: `100.0`) → Frequency [Hz] at which TFs and markers are published.  
 
 ---
 
-## Published Topics
+### Published Topics
 
 - `visualization_marker` (`visualization_msgs/Marker`)  
   → 3D marker for RViz visualization.  
@@ -42,7 +43,7 @@ It subscribes to the `haply_state` topic and publishes TF transforms and visuali
 
 ---
 
-## Usage
+### Usage
 
 Run the visualization node:
 
