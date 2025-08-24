@@ -1,6 +1,6 @@
 # Driver nodes
 
-This README contains detailed documentation for the available driver nodes in this including their functionality, published and subscribed topics, parameters, and usage instructions.
+This README contains detailed documentation for the available driver nodes including their functionality, published and subscribed topics, parameters, and usage instructions.
 
 
 ## `haply_driver_node`
@@ -14,10 +14,6 @@ This is the main driver node responsible for managing **both** the Inverse3 and 
 - Publishes this data to various ROS2 topics:
   - `inverse3_state` (`haply_msgs/Inverse3State`)  
     → Contains the current position and velocity of the Inverse3 cursor.
-  - `handle_quaternion_state` (`geometry_msgs/Quaternion`)  
-    → Publishes the raw orientation of the VerseGrip Stylus.
-  - `handle_buttons_state` (`std_msgs/UInt8`)  
-    → Encodes the binary state of the buttons on the handle.
   - `handle_state` (`haply_msgs/HandleState`)  
     → Combines the orientation and buttons into a single message.
   - `haply_state` (`haply_msgs/HaplyState`)  
@@ -33,7 +29,83 @@ This node is useful when you want to interface with both devices simultaneously.
 To start the node, use the following command:
 
 ```bash
-ros2 run haply_interface haply_driver_node --ros-args -p frequency:=5.0
+ros2 run haply_interface haply_driver_node --ros-args -p frequency:=200.0
+```
+
+## `haply_driver_node`
+
+This is the main driver node responsible for managing **both** the Inverse3 and the VerseGrip Stylus devices simultaneously.  
+
+### Features
+
+- **WebSocket connection**  
+  Connects to the `haply-inverse-service` running on the host machine to exchange data with the hardware.
+
+- **Real-time state acquisition**  
+Listens to real-time data streams from both devices:
+  - Cursor position and velocity (Inverse3)
+  - Orientation and button states (VerseGrip Stylus)
+
+- **ROS2 publishers**  
+  Publishes device data to the following topics:
+  - `inverse3_state` (`haply_msgs/Inverse3State`)  
+    → Current position and velocity of the Inverse3.  
+  - `handle_state` (`haply_msgs/HandleState`)  
+    → Orientation and button states of the Handle.  
+  - `haply_state` (`haply_msgs/HaplyState`)  
+    → Unified topic with position, velocity, orientation, and button states.  
+
+- **Force and position-based control**  
+  Subscribes to control commands on topic:  
+  - `haply_target` (`haply_msgs/HaplyControl`)  
+
+  Two control modes are supported:
+  1. **Force-based control**  
+     - Incoming command specifies direct force values (`x`, `y`, `z`).  
+     - These forces are applied immediately to the Inverse3 device.  
+
+  2. **Position-based control**  
+     - Incoming command specifies a target position.  
+     - The driver computes corrective forces using a **PID controller**:  
+
+        ![PID formula](https://latex.codecogs.com/svg.image?\color{white}%20F%20%3D%20K_p%20\cdot%20e%20%2B%20K_i%20\int%20e\cdot%20dt%20-%20K_d%20\cdot%20v)
+
+        where:
+          - `e = x_target - x` (position error)
+          - `v` is the measured velocity
+          - `Kp, Ki, Kd` are configurable controller gains
+
+
+
+     - Computed forces are **clamped** to the maximum allowed per-axis force.  
+
+- **Safety and timeouts**  
+  - If no new force command is received within a configurable timeout, force output is set to zero.  
+  - If no devices are detected for 200 seconds, the node shuts down automatically.  
+
+- **Diagnostics and logging**  
+  - Prints device information (ID, port, calibration, battery, readiness) at startup.  
+  - Logs uptime and warnings if devices are missing or not awake.  
+
+---
+
+### Parameters
+
+- `frequency` (default: `200.0`) → Publishing frequency [Hz]  
+- `max_force` (default: `10.0`) → Maximum allowed per-axis force [N]  
+- PID gains (fixed in code, can be tuned):  
+  - `Kp = 30.0` [N/m]  
+  - `Ki = 5.0` [N/(m·s)]  
+  - `Kd = 0.9` [N·s/m]  
+
+---
+
+### Usage
+
+Run the driver node:
+
+```bash
+ros2 run haply_interface haply_driver_node --ros-args -p frequency:=200.0 -p max_force:=15.0
 ```
 
 ## `inverse3_driver_node`
