@@ -81,7 +81,7 @@ This ROS2 node subscribes to both:
   Error is computed as:  
 
   $$
-  \text{error}[] = \frac{x_{target} - x_{actual}}{x_{target}} \cdot 100
+  \text{error}[\%] = \frac{x_{target} - x_{actual}}{x_{target}} \cdot 100
   $$
 
 - **Rolling time window**  
