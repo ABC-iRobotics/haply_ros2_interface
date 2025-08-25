@@ -152,8 +152,6 @@ After completing the installation steps described in the guide above, follow the
    ```
 > **Note:** The device will be inaccessible from Windows while attached to WSL.
 
-
-
 ## Repository Structure
 
 ### `haply_demos`  
