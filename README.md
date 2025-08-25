@@ -1,6 +1,6 @@
 # Haply ROS2 Interface
 
-This package provides a ROS2 interface for the **Haply Inverse3** and **VerseGrip Stylus** haptic devices. It includes drivers, visualization tools, and control nodes to operate and test the devices individually or together within a ROS2 environment.
+This package provides a ROS2 interface for the **Haply Inverse3** and **VerseGrip Stylus (Handle)** haptic devices. It includes drivers, visualization tools, and control nodes to operate and test the devices individually or together within a ROS2 environment.
 
 ---
 
@@ -83,23 +83,20 @@ For installation and testing instructions, please refer to the official document
 
 ### Cloning the repository
 
-Before cloning the repository, first create a new ROS2 workspace:
-
-```bash
-mkdir -p ~/haply_ws/src
-cd ~/haply_ws/src
-```
-
-Then clone the repository into the `src` folder:
+Navigate to the directory where you want to place the repository, then clone it:
 
 ```bash
 git clone <repository url>
 ```
 
-After cloning, return to the workspace root and build it using `colcon`:
+After cloning, go to the workspace root:
 
 ```bash
-cd ~/haply_ws
+cd ~/haply_ros2_interface
+```
+
+and build it using `colcon`:
+```bash
 colcon build
 ```
 
@@ -157,46 +154,32 @@ After completing the installation steps described in the guide above, follow the
 
 
 
-## Available Nodes
+## Repository Structure
 
-### Summary of available nodes
-- [`haply_driver_node`](#haply_driver_node) – Main driver that handles both Inverse3 and VerseGrip devices simultaneously.
-- [`inverse3_driver_node`](#inverse3_driver_node) – Driver for the Inverse3 only (useful for testing).
-- [`handle_driver_node`](#handle_driver_node) – Driver for the VerseGrip Stylus only (useful for testing).
-- [`rviz_visualization_node`](#rviz_visualization_node) – Publishes transform data to visualize the device in RViz.
-- Demos
+### `haply_demos`  
+This folder contains the **launch files** that demonstrate different applications of the Haply devices.  
+A detailed description of each launch file can be found in the [`launch_files_README.md`](src/haply_demos/launch_files_README.md).
+
 ---
 
-### `haply_driver_node`
+### `haply_interface`  
+This folder contains the **ROS2 nodes** used by the system, organized into three categories:  
+- **Driver nodes** → Handle the communication between the Haply devices and ROS2.
+A detailed description of each node can be found in the [`drivers_README.md`](src/haply_interface/haply_interface/drivers/drivers_README.md).
 
-This is the main driver node responsible for managing **both** the Inverse3 and the VerseGrip Stylus devices simultaneously. It performs the following key tasks:
+- **Visualization nodes** → Provide 2D/3D visualization of device states and transforms (e.g., in RViz).  
+A detailed description of each node can be found in the [`visualization_README.md`](src/haply_interface/haply_interface/visualize/visualization_README.md).
 
-To start the node, use the following command:
+- **Demo nodes** → Demonstrate various capabilities and use-cases of the Haply devices.
+A detailed description of each node can be found in the [`demo_nodes_README.md`](src/haply_interface/haply_interface/demo_nodes/demo_nodes_README.md).
 
-```bash
-ros2 run haply_interface haply_driver_node --ros-args -p frequency:=200.0
-```
+---
 
-### `inverse3_driver_node`
+### `haply_meshes`  
+This folder includes the **STL files** used for 3D visualization of the Handle (VerseGrip Stylus) in RViz.
 
-This node is a dedicated ROS2 driver for the **Inverse3** device, allowing developers to monitor its state and control the applied forces independently of other hardware.
+---
 
-To start the node, use the following command:
+### `haply_msgs`  
+This folder defines the **custom ROS2 message types** used by the ROS2 interface.
 
-```bash
-ros2 run haply_interface inverse3_driver_node --ros-args -p frequency:=200.0
-```
-
-### `handle_driver_node`
-
-This node is a dedicated ROS2 driver for the **VerseGrip Stylus** (also referred to as the Handle), allowing standalone monitoring of its orientation and button states without requiring the Inverse3 device.
-
-To start the node, use the following command:
-
-```bash
-ros2 run haply_interface handle_driver_node --ros-args -p frequency:=200.0
-```
-
-### Demo Nodes
-
-Several demo nodes have been created for testing the interface. These, along with detailed descriptions, can be found in the demos folder.
