@@ -2,6 +2,11 @@
 
 This package provides a ROS2 interface for the **Haply Inverse3** and **VerseGrip Stylus (Handle)** haptic devices. It includes drivers, visualization tools, and control nodes to operate and test the devices individually or together within a ROS2 environment.
 
+This implementation was tested on:
+- Windows 11 (WSL2 Ubuntu 22.04 LTS (64-bit))
+- Python 3.10.6
+
+
 ---
 
 ## Contents
@@ -105,7 +110,6 @@ Finally, source the setup script:
 ```bash
 source install/setup.bash
 ```
-> **Note:** This command must be run in every new terminal where you want to use the ROS2 workspace. You can also add it to your shell configuration file (e.g. .bashrc) to have it sourced automatically.
 
 ### Set Up Haply Device
 
@@ -117,9 +121,9 @@ For setting up and calibrating the devices, please refer to the official Haply d
  
 It is recommended to recalibrate the device each time it is reconnected to ensure accurate tracking and operation.
 
-### Connecting USB Devices to Linux (WSL 2)
+### Connecting USB Devices to WSL 2
 
-To use the Haply devices under WSL 2 (e.g., with Ubuntu 22.04), it is necessary to make the USB connection available to your Linux distribution.
+To use the Haply devices under WSL 2, it is necessary to make the USB connection available to your Linux distribution.
 
 For first-time setup and detailed guidance, follow the official documentation:   [Microsoft Guide: Connect USB Devices to WSL](https://learn.microsoft.com/en-gb/windows/wsl/connect-usb)
 
@@ -155,13 +159,13 @@ After completing the installation steps described in the guide above, follow the
 ## Repository Structure
 
 ### `haply_demos`  
-This folder contains the **launch files** that demonstrate different applications of the Haply devices.  
+This package contains the **launch files** that demonstrate different applications of the Haply devices.  
 A detailed description of each launch file can be found in the [`launch_files_README.md`](src/haply_demos/launch_files_README.md).
 
 ---
 
 ### `haply_interface`  
-This folder contains the **ROS2 nodes** used by the system, organized into three categories:  
+This package contains the **ROS2 nodes** used by the system, organized into three categories:  
 - **Driver nodes** → Handle the communication between the Haply devices and ROS2.
 A detailed description of each node can be found in the [`drivers_README.md`](src/haply_interface/haply_interface/drivers/drivers_README.md).
 
@@ -174,10 +178,11 @@ A detailed description of each node can be found in the [`demo_nodes_README.md`]
 ---
 
 ### `haply_meshes`  
-This folder includes the **STL files** used for 3D visualization of the Handle (VerseGrip Stylus) in RViz.
+This package includes the **STL files** used for 3D visualization of the Handle (VerseGrip Stylus) in RViz.
 
 ---
 
 ### `haply_msgs`  
-This folder defines the **custom ROS2 message types** used by the ROS2 interface.
+This package defines the **custom ROS2 message types** used by the ROS2 interface.
+
 
