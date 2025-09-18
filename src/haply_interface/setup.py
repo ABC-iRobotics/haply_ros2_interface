@@ -38,6 +38,8 @@ setup(
 
             'rviz_visualization_node = haply_interface.visualize.rviz_visualization_node:main',
             'plotter_node = haply_interface.visualize.plotter_node:main',
+
+            'daVinci_control = haply_interface.demo_nodes.daVinci_control:main',
         ],
     },
 )
