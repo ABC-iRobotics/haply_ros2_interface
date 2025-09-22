@@ -21,11 +21,14 @@ This implementation was tested on:
   - [Cloning the Repository](#cloning-the-repository)
   - [Set Up Haply Device](#set-up-haply-device)
   - [Connecting USB Devices to Linux (WSL 2)](#connecting-usb-devices-to-linux-wsl-2)
-- [Available Nodes](#available-nodes)
-  - [`haply_driver_node`](#haply_driver_node)
-  - [`inverse3_driver_node`](#inverse3_driver_node)
-  - [`handle_driver_node`](#handle_driver_node)
-  - [Demo Nodes](#demo-nodes)
+- [First Run: Two Plug-and-Play Demos](#first-run-two-plug-and-play-demos)
+  - [`haptic_ball`](#haptic_ball)
+  - [`target_position_sinus`](#target_position_sinus)
+- [Repository Structure](#repository-structure)
+  - [`haply_demos`](#haply_demos)
+  - [`haply_interface`](#haply_interface)
+  - [`haply_meshes`](#haply_meshes)
+  - [`haply_msgs`](#haply_msgs)
 
 ## Prerequisites
 
@@ -155,6 +158,32 @@ After completing the installation steps described in the guide above, follow the
    usbipd detach --busid <busid>
    ```
 > **Note:** The device will be inaccessible from Windows while attached to WSL.
+
+## First Run: Two Plug-and-Play Demos
+
+This section presents two simple demos that you can launch immediately after completing the steps above; they showcase the device’s capabilities and basic operation.
+
+### `haptic_ball`
+
+This demo implements a virtual haptic sphere interaction.  
+It continuously computes and applies forces to the Inverse3 device to simulate a spring-like boundary when the device enters the defined sphere volume.
+It also publishes a sphere marker to RViz (`visualization_marker`) so that the simulated ball is also visible in the 3D scene. 
+
+**Run:**  
+
+```bash
+ros2 run haply_interface haptic_ball --ros-args -p stiffness:=200.0 -p position_scale:=10.0
+```
+
+### `target_position_sinus`
+
+This demo moves the device sinusoidally along the z-axis with a 0.1 m amplitude. Meanwhile, it plots the desired and actual positions, allowing you to gauge the PID controller’s accuracy. 
+
+To start the node, use:
+
+```bash
+ros2 run haply_interface target_position_publisher
+```
 
 ## Repository Structure
 
