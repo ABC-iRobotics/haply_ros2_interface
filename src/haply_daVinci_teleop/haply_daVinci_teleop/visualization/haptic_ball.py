@@ -17,14 +17,14 @@ class HaplyForceController(Node):
 
         # Parameters 
         self.declare_parameter("stiffness", 200.0)  # Haptic stiffness
-        self.declare_parameter("position_scale", 10.0)  # Visualization scale
+        self.declare_parameter("position_scale", 1.0)  # Visualization scale
 
         self.stiffness = float(self.get_parameter("stiffness").value)
         self.position_scale = float(self.get_parameter("position_scale").value)
 
         # Virtual sphere
-        self.sphere_center = [-0.07, -0.2, 0.2]
-        self.sphere_radius = 0.08
+        self.sphere_center = [0.0, 0.0, 0.0]
+        self.sphere_radius = 0.1
 
         # Subscribers
         self.state_subscriber = self.create_subscription(
