@@ -16,8 +16,6 @@ class ArmOps:
         u.add_operating_state()
         u.add_setpoint_cp()     # read the set Cartesian pose of endeffector (Attention: not the actual pose!)
         u.add_servo_cp()        # set Cartesian pose of endeffector
-        #u.add_setpoint_js()     # set joint angles tool
-        #u.add_measured_js()     # read joint angles tool
 
     def ral(self):
         return self._ral
@@ -152,10 +150,7 @@ class HaplyToDaVinciBridge(Node):
         # get current orientation as RPY, add deltas, set new rotation
         calibrated_Rotation = target_daVinci_pose.M
         r_cal, p_cal, y_cal = calibrated_Rotation.GetRPY()
-        # NOTE: swap pitch/yaw application to correct swapped axes
-        #new_Rotation = PyKDL.Rotation.RPY(r_cal + droll, p_cal + dyaw, y_cal + dpitch)
-        #new_Rotation = PyKDL.Rotation.RPY(r_cal + droll, p_cal + dyaw, y_cal + dpitch)
-        #new_Rotation = PyKDL.Rotation.RPY(r_cal + droll, p_cal + dyaw, y_cal + dpitch)
+        # swap pitch/yaw application to correct swapped axes
         new_Rotation = PyKDL.Rotation.RPY(r_cal + dpitch, p_cal - droll, y_cal + dyaw)
         target_daVinci_pose.M = new_Rotation
         
@@ -166,7 +161,7 @@ class HaplyToDaVinciBridge(Node):
             self.get_logger().error(f"Error sending servo_cp: {e}")
 
 
-    # --- NEU: Hilfsfunktion zur Roll-Berechnung ---
+    # function to convert quaternion to roll angle
     def _quaternion_to_roll(self, x, y, z, w):
         sinr_cosp = 2.0 * (w * x + y * z)
         cosr_cosp = 1.0 - 2.0 * (x*x + y*y)

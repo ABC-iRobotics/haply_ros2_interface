@@ -2,46 +2,64 @@
 
 import rclpy
 from rclpy.node import Node
-from visualization_msgs.msg import Marker
-from geometry_msgs.msg import Point
-from geometry_msgs.msg import PoseStamped
-import math
 from rclpy.duration import Duration
+import math
 import tf2_ros
 import tf2_geometry_msgs
 
-class GreiferLoopCylinders(Node):
+from visualization_msgs.msg import Marker
+from geometry_msgs.msg import Point, PoseStamped, TransformStamped
+from tf2_ros.static_transform_broadcaster import StaticTransformBroadcaster
+
+
+class HapticLoop(Node):
     """Visualizes a loop attached to the PSM1 gripper using a single Marker"""
 
     def __init__(self):
         super().__init__("greifer_loop_cylinders")
 
-        # Publisher für Marker
+        # Publisher for marker and loop center
         self.marker_pub = self.create_publisher(Marker, "visualization_marker", 10)
+        self.loop_center_pub = self.create_publisher(PoseStamped, "loop_center", 10)
 
-        # Subscriber auf Greifer-Pose
-        # store full PoseStamped so we can reuse header.frame_id
+        # Subscriber for PSM1 pose
         self.create_subscription(PoseStamped, "/PSM1/local/measured_cp", self.gripper_callback, 10)
 
         # Parameter Loop
-        self.loop_radius = 0.01         # 1 cm Radius
-        self.loop_segments = 24         # number segments to approximate the circle
+        self.loop_radius = 0.005        # loop radius
+        self.loop_segments = 10         # number segments to approximate the circle (keep low for performance)
         self.loop_thickness = 0.002     # cylinder diameter 2 mm
         self.loop_x_offset = 0.00       # offset along gripper X axis
-        self.loop_y_offset = 0.02       # offset along gripper Y axis
+        self.loop_y_offset = 0.01+self.loop_radius  # offset along gripper Y axis
         self.loop_z_offset = 0.00       # offset along gripper Z axis
 
-        # Aktuelle Greifer-Pose (PoseStamped)
+        # Initialize variables
         self.gripper_pose_stamped = None
         self.gripper_pose_world = None
-        # TF buffer/listener zum Transformieren nach 'world'
+        # TF buffer/listener for transforming to 'world'
         self.tf_buffer = tf2_ros.Buffer()
         self.tf_listener = tf2_ros.TransformListener(self.tf_buffer, self)
 
-        # Timer für kontinuierliches Visualisieren
-        self.timer = self.create_timer(1/10, self.publish_loop_marker)
+        # Static transform broadcaster for PSM1_base -> world frame (needed for smooth RViz visualization)
+        self.static_broadcaster = StaticTransformBroadcaster(self)
+        static_transform = TransformStamped()
+        static_transform.header.stamp = self.get_clock().now().to_msg()
+        static_transform.header.frame_id = "world"
+        static_transform.child_frame_id = "PSM1_base"
+        static_transform.transform.translation.x = 0.0
+        static_transform.transform.translation.y = 0.0
+        static_transform.transform.translation.z = 0.0
+        static_transform.transform.rotation.x = 0.0
+        static_transform.transform.rotation.y = 0.0
+        static_transform.transform.rotation.z = 0.0
+        static_transform.transform.rotation.w = 1.0
+        self.static_broadcaster.sendTransform(static_transform)
 
-        self.get_logger().info("Greifer Loop (Cylinder) Visualization initialized.")
+        # Timer for continuous visualization
+        self.timer = self.create_timer(1/1000, self.publish_loop_marker)
+
+        self.get_logger().info("Haptic Loop Visualization initialized.")
+
 
     def gripper_callback(self, msg: PoseStamped):
         # keep full pose (including header.frame_id)
@@ -60,81 +78,82 @@ class GreiferLoopCylinders(Node):
             self.get_logger().debug(f"TF transform to 'world' failed: {e}")
             self.gripper_pose_world = None
 
-    def _quat_rotate_vector(self, qx, qy, qz, qw, vx, vy, vz):
-        """
-        Rotate vector v by quaternion q (qx,qy,qz,qw).
-        Uses optimized formula: t = 2 * cross(q_xyz, v); v' = v + q_w * t + cross(q_xyz, t)
-        """
-        # cross(q_xyz, v)
-        cx = qy * vz - qz * vy
-        cy = qz * vx - qx * vz
-        cz = qx * vy - qy * vx
-        # t = 2 * cross
-        tx = 2.0 * cx
-        ty = 2.0 * cy
-        tz = 2.0 * cz
-        # v' = v + q_w * t + cross(q_xyz, t)
-        # cross(q_xyz, t)
-        c2x = qy * tz - qz * ty
-        c2y = qz * tx - qx * tz
-        c2z = qx * ty - qy * tx
-        vx_p = vx + qw * tx + c2x
-        vy_p = vy + qw * ty + c2y
-        vz_p = vz + qw * tz + c2z
-        return vx_p, vy_p, vz_p
 
-    def _quat_mul(self, a, b):
-        """Quaternion multiplication a * b. a,b as (x,y,z,w)."""
-        ax, ay, az, aw = a
-        bx, by, bz, bw = b
-        w = aw*bw - ax*bx - ay*by - az*bz
-        x = aw*bx + ax*bw + ay*bz - az*by
-        y = aw*by - ax*bz + ay*bw + az*bx
-        z = aw*bz + ax*by - ay*bx + az*bw
-        return x, y, z, w
+    def rotate_vector_by_quaternion(self, qx, qy, qz, qw, vector_x, vector_y, vector_z):
+        # Compute the cross product q_xyz × v, which is part of the quaternion rotation formula
+        cross_x = qy * vector_z - qz * vector_y
+        cross_y = qz * vector_x - qx * vector_z
+        cross_z = qx * vector_y - qy * vector_x
+
+        # Multiply the cross product by 2 to form the intermediate vector t = 2 * (q_xyz × v)
+        buffervector_x = 2.0 * cross_x
+        buffervector_y = 2.0 * cross_y
+        buffervector_z = 2.0 * cross_z
+
+        # Compute the final rotated vector using the formula: v' = v + qw * t + q_xyz × t
+        second_cross_x = qy * buffervector_z - qz * buffervector_y
+        second_cross_y = qz * buffervector_x - qx * buffervector_z
+        second_cross_z = qx * buffervector_y - qy * buffervector_x
+        rotated_vector_x = vector_x + qw * buffervector_x + second_cross_x
+        rotated_vector_y = vector_y + qw * buffervector_y + second_cross_y
+        rotated_vector_z = vector_z + qw * buffervector_z + second_cross_z
+        # Return the rotated vector in global/world coordinates
+        return rotated_vector_x, rotated_vector_y, rotated_vector_z
+
+
+    def multiply_quaternions(self, quaternion_a, quaternion_b):
+        ax, ay, az, aw = quaternion_a
+        bx, by, bz, bw = quaternion_b
+        # Combines the rotations of a and b into a single rotation
+        result_quaternion_w = aw*bw - ax*bx - ay*by - az*bz
+        result_quaternion_x = aw*bx + ax*bw + ay*bz - az*by
+        result_quaternion_y = aw*by - ax*bz + ay*bw + az*bx
+        result_quaternion_z = aw*bz + ax*by - ay*bx + az*bw
+        # Return the resulting quaternion (x, y, z, w)
+        return result_quaternion_x, result_quaternion_y, result_quaternion_z, result_quaternion_w
+
 
     def publish_loop_marker(self):
         if self.gripper_pose_stamped is None:
             return
         # prefer the pose already transformed to world (if available), otherwise use original frame
-        ps = self.gripper_pose_world if self.gripper_pose_world is not None else self.gripper_pose_stamped
+        pose_gripper = self.gripper_pose_world if self.gripper_pose_world is not None else self.gripper_pose_stamped
 
-        cx = ps.pose.position.x
-        cy = ps.pose.position.y
-        cz = ps.pose.position.z
-        qx = ps.pose.orientation.x
-        qy = ps.pose.orientation.y
-        qz = ps.pose.orientation.z
-        qw = ps.pose.orientation.w
+        position_gripper_x = pose_gripper.pose.position.x
+        position_gripper_y = pose_gripper.pose.position.y
+        position_gripper_z = pose_gripper.pose.position.z
+        quaternion_gripper_x = pose_gripper.pose.orientation.x
+        quaternion_gripper_y = pose_gripper.pose.orientation.y
+        quaternion_gripper_z = pose_gripper.pose.orientation.z
+        quaternion_gripper_w = pose_gripper.pose.orientation.w
 
-        # --- Zusatzrotation zum Test: 90 Grad um lokale X-Achse ---
-        angle_deg = 90.0
-        if angle_deg != 0.0:
-            a = math.radians(angle_deg / 2.0)
-            sx = math.sin(a)
-            ca = math.cos(a)        # <-- benutze 'ca' statt 'cx' um Position nicht zu überschreiben
-            # Quaternion für Rotation um X: (x,y,z,w) = (sin(a),0,0,cos(a))
-            q_extra = (sx, 0.0, 0.0, ca)
-            q_orig = (qx, qy, qz, qw)
-            # Falls du die Zusatzrotation VOR der Originalausrichtung anwenden willst, tausche die Reihenfolge:
-            # qx, qy, qz, qw = self._quat_mul(q_extra, q_orig)
-            qx, qy, qz, qw = self._quat_mul(q_orig, q_extra)
+        # additional rotation of 90 degrees around gripper X to align loop plane with gripper jaws
+        loop_angle = 90.0
+        if loop_angle != 0.0:
+            half_angle_rad = math.radians(loop_angle / 2.0)
+            sin_half_angle = math.sin(half_angle_rad)
+            cos_half_angle = math.cos(half_angle_rad)        
+            # rotation quaternion around X axis
+            loop_rotation_quaternion = (sin_half_angle, 0.0, 0.0, cos_half_angle)
+            gripper_orientation_quaternion = (quaternion_gripper_x, quaternion_gripper_y, quaternion_gripper_z, quaternion_gripper_w)
+            quaternion_gripper_x, quaternion_gripper_y, quaternion_gripper_z, quaternion_gripper_w = self.multiply_quaternions(gripper_orientation_quaternion, loop_rotation_quaternion)
 
+        # apply optional offsets along gripper axes
         if abs(self.loop_x_offset) > 0 or abs(self.loop_y_offset) > 0 or abs(self.loop_z_offset) > 0:
-            ox, oy, oz = self._quat_rotate_vector(qx, qy, qz, qw, self.loop_x_offset, self.loop_y_offset, self.loop_z_offset)
-            cx += ox
-            cy += oy
-            cz += oz
+            offset_world_x, offset_world_y, offset_world_z = self.rotate_vector_by_quaternion(quaternion_gripper_x, quaternion_gripper_y, quaternion_gripper_z, quaternion_gripper_w, self.loop_x_offset, self.loop_y_offset, self.loop_z_offset)
+            position_gripper_x += offset_world_x
+            position_gripper_y += offset_world_y
+            position_gripper_z += offset_world_z
 
         marker = Marker()
-        # publish marker in the pose's frame (if transformed to world, header.frame_id == "world")
-        marker.header.frame_id = ps.header.frame_id if ps.header and ps.header.frame_id else "world"
+        # publish marker in the pose's frame ("world" leads to latency issues)
+        marker.header.frame_id = pose_gripper.header.frame_id if pose_gripper.header and pose_gripper.header.frame_id else "world"
         marker.header.stamp = self.get_clock().now().to_msg()
         marker.ns = "gripper_loop"
         marker.id = 0
-        marker.type = Marker.LINE_STRIP  # simple and efficient
+        marker.type = Marker.LINE_STRIP  
         marker.action = Marker.ADD
-        marker.scale.x = self.loop_thickness  # Strichdicke
+        marker.scale.x = self.loop_thickness  
         marker.color.r = 0.0
         marker.color.g = 1.0
         marker.color.b = 0.0
@@ -143,27 +162,40 @@ class GreiferLoopCylinders(Node):
         marker.lifetime.nanosec = 0
 
         # build circle in gripper-local XY plane, rotate each point by gripper orientation
-        for i in range(self.loop_segments + 1):  # +1, um den Kreis zu schließen
-            angle = 2 * math.pi * i / self.loop_segments
-            lx = self.loop_radius * math.cos(angle)
-            ly = self.loop_radius * math.sin(angle)
-            lz = 0.0  # circle lies in local XY plane
+        for segment_index in range(self.loop_segments + 1):  
+            segment_angle = 2 * math.pi * segment_index / self.loop_segments
+            local_x = self.loop_radius * math.cos(segment_angle)
+            local_y = self.loop_radius * math.sin(segment_angle)
+            local_z = 0.0  
 
             # rotate local point into world by quaternion (with optional extra rotation applied)
-            rx, ry, rz = self._quat_rotate_vector(qx, qy, qz, qw, lx, ly, lz)
+            world_x, world_y, world_z = self.rotate_vector_by_quaternion(quaternion_gripper_x, quaternion_gripper_y, quaternion_gripper_z, quaternion_gripper_w, local_x, local_y, local_z)
 
             p = Point()
-            p.x = cx + rx
-            p.y = cy + ry
-            p.z = cz + rz
+            p.x = position_gripper_x + world_x
+            p.y = position_gripper_y + world_y
+            p.z = position_gripper_z + world_z
             marker.points.append(p)
 
         self.marker_pub.publish(marker)
 
+        # publish loop center pose
+        loop_center = PoseStamped()
+        loop_center.header = marker.header
+        loop_center.pose.position.x = position_gripper_x
+        loop_center.pose.position.y = position_gripper_y
+        loop_center.pose.position.z = position_gripper_z
+        loop_center.pose.orientation.x = quaternion_gripper_x
+        loop_center.pose.orientation.y = quaternion_gripper_y
+        loop_center.pose.orientation.z = quaternion_gripper_z
+        loop_center.pose.orientation.w = quaternion_gripper_w
+
+        self.loop_center_pub.publish(loop_center)
+
 
 def main(args=None):
     rclpy.init(args=args)
-    node = GreiferLoopCylinders()
+    node = HapticLoop()
     try:
         rclpy.spin(node)
     except KeyboardInterrupt:
