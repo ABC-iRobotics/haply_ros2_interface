@@ -32,14 +32,15 @@ class HotWire(Node):
 
         # Define start and end points of the wire in cartesian coordinates (unit: meters)
         self.wire_start = [-0.05, 0.0, -0.1]
-        self.wire_end = [0.05, 0.05, -0.1]
-
-        # Virtual sphere
-        self.sphere_center = [-0.05, 0.0, -0.1]
-        self.sphere_radius = 0.02
-        # Haptic stiffness of wire
-        self.stiffness = 200.0 
-        self.damping = 0.1
+        self.wire_end = [0.05, 0.025, -0.1]
+        # Haptic stiffness and damping factors for virtual spring-damper system
+        self.stiffness = 200.0
+        self.damping = 0.0
+        # define attraction zone (distance loopcenter from wire) 
+        self.inner_limit_deadzone = 0.001  
+        self.outer_limit_deadzone = 0.005  
+        # use force feedback toggle (True/False)
+        self.use_force_feedback = False
 
         self.get_logger().info(
             f"Haply Force Controller initialized: stiffness={self.stiffness}")
@@ -47,8 +48,8 @@ class HotWire(Node):
 
     def state_callback(self, msg):
         # Extract device position
-        haply_position = [msg.position.x, msg.position.y, msg.position.z]
-        self.get_logger().info(f"haply Position: x={haply_position[0]:.3f}, y={haply_position[1]:.3f}, z={haply_position[2]:.3f}")
+        haply_velocity = [msg.velocity.x, msg.velocity.y, msg.velocity.z]
+        #self.get_logger().info(f"haply Velocity: x={haply_velocity[0]:.3f}, y={haply_velocity[1]:.3f}, z={haply_velocity[2]:.3f}")
 
 
     def loop_center_callback(self, msg: PoseStamped):
@@ -56,7 +57,6 @@ class HotWire(Node):
 
         # Extract device position
         device_position = [msg.pose.position.x, msg.pose.position.y, msg.pose.position.z]
-        self.get_logger().info(f"Loop center Position: x={device_position[0]:.3f}, y={device_position[1]:.3f}, z={device_position[2]:.3f}")
         # Compute the haptic force
         force = self.compute_haptic_force(device_position)
 
@@ -72,58 +72,55 @@ class HotWire(Node):
 
 
     def compute_haptic_force(self, device_position):
-        """Force based on virtual loop-wire interaction"""
+        """Compute attractive force pulling the loop center toward the wire when distance is between deadzone and loop."""
 
         wire_start = self.wire_start
         wire_end = self.wire_end
         loopcenter_position = device_position
 
-        # wire direction vector and length
+        # wire direction vector and length 
         wire_vector = [wire_end[i] - wire_start[i] for i in range(3)]
         wire_length = math.sqrt(sum(v ** 2 for v in wire_vector))
         if wire_length == 0.0:
             self.get_logger().warning("Wire length is zero!")
             return [0.0, 0.0, 0.0]
         wire_direction = [v / wire_length for v in wire_vector]
-        
+
         # vector from wire start to loop center
         wirestart_to_loopcenter = [loopcenter_position[i] - wire_start[i] for i in range(3)]
-        
-        # project onto wire direction to find closest point on wire
+
+        # projection onto wire to find closest point on the wire
         projection_length = sum(wirestart_to_loopcenter[i] * wire_direction[i] for i in range(3))
-       
-        # clamp to wire segment
-        projection_length = max(0.0, min(wire_length, projection_length))
-        
-        # closest point on wire to loopcenter 
+        projection_length = max(0.0, min(wire_length, projection_length))  # clamp to segment
+
+        # calculate closest point on wire 
         closest_point = [
             wire_start[i] + projection_length * wire_direction[i] for i in range(3)
         ]
-        
-        # vector from closest point to loop center
-        closest_to_loopcenter = [
-            loopcenter_position[i] - closest_point[i] for i in range(3)
+
+        # vector from loop center to closest point on wire
+        loopcenter_to_wire = [
+            closest_point[i] - loopcenter_position[i] for i in range(3)
         ]
-        distance = math.sqrt(sum(v ** 2 for v in closest_to_loopcenter))
+        distance = math.sqrt(sum(v ** 2 for v in loopcenter_to_wire))
         if distance < 1e-6:
             return [0.0, 0.0, 0.0]
-        
-        # normalized direction from wire to loop center
-        direction = [v / distance for v in closest_to_loopcenter]
 
-        # define an effective interaction radius around the wire
-        interaction_radius = 0.005  # 5 mm
-        penetration = interaction_radius - distance
+        # normalized direction (from loopcenter toward wire)
+        direction = [v / distance for v in loopcenter_to_wire]
 
-        # if outside interaction radius, no force
-        if penetration <= 0.0:
+        # check if within attraction range 
+        if distance <= self.inner_limit_deadzone or distance >= self.outer_limit_deadzone:
             return [0.0, 0.0, 0.0]
+
+        # attractive force toward wire 
+        raw_force = [direction[i] * self.stiffness * distance for i in range(3)]
+
+        if self.use_force_feedback:
+            return raw_force  
         else:
-            force = [
-                direction[i] * penetration * self.stiffness - self.damping * direction[i] for i in range(3)
-            ]
-        return force
-        
+            return [0.0, 0.0, 0.0] 
+
 
     def publish_wire_marker(self):
         """Publishes a line marker representing the wire"""
