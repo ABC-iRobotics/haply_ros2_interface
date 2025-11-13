@@ -64,7 +64,7 @@ class HotWire(Node):
         control_msg = HaplyControl()
         control_msg.use_position = False  
         control_msg.force = Vector3(x=force[0], y=force[1], z=force[2])
-        control_msg.target_position = Point(x=0.0, y=0.0, z=0.0)  
+        control_msg.target_position = Point(x=0.0, y=0.0, z=0.0) # default   
 
         # Publish
         self.force_publisher.publish(control_msg)
