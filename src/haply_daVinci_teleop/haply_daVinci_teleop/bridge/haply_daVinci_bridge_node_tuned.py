@@ -4,9 +4,7 @@ import numpy as np
 from rclpy.node import Node
 from haply_msgs.msg import HaplyState
 from geometry_msgs.msg import PoseStamped
-from sensor_msgs.msg import JointState
 import crtk
-import time
 import PyKDL
 import math
 
@@ -14,11 +12,8 @@ class JawOps:
     def __init__(self, arm_ral, connection_timeout=10.0):
         self._ral = arm_ral.create_child("jaw")
         u = crtk.utils(self, self._ral, connection_timeout)
-        u.add_measured_js()   # liest die Greiferposition
-        u.add_servo_jp()      # ermöglicht servo_jp()
-
-        def servo_jp(self, target_list):
-            self._ral.servo_jp(target_list)
+        u.add_measured_js()   # read jaw
+        u.add_servo_jp()      
     
 # class for using CRTK arm operations
 class ArmOps:
@@ -28,7 +23,7 @@ class ArmOps:
         u.add_operating_state()
         u.add_setpoint_cp()     # read the set Cartesian pose of endeffector (Attention: not the actual pose!)
         u.add_servo_cp()        # set Cartesian pose of endeffector
-        u.add_servo_jp()       # set jaw position
+        u.add_servo_jp()        
 
         # Create a child RAL for the jaw
         self.jaw = JawOps(self._ral, connection_timeout)
@@ -55,10 +50,6 @@ class HaplyToDaVinciBridge(Node):
         # dsubscribe daVinci data
         self.daVinci_pose = None
         self.create_subscription(PoseStamped, '/PSM1/measured_cp', self.daVinci_measured_callback, 10)
-
-        #subscribe daVinci jaw data
-        #self.daVinci_jaw_position = None
-        #self.create_subscription(JointState, '/PSM1/jaw/measured_jaw', self.daVinci_measured_jaw_callback, 10)
 
         # subscribe Haply data
         self.create_subscription(HaplyState, "haply_state", self.haply_state_callback, 10)
@@ -97,20 +88,12 @@ class HaplyToDaVinciBridge(Node):
 
     def control_jaw(self, msg: HaplyState):
         try:
-            if msg.buttons.a:        # Button A → öffnen
+            if msg.buttons.a:        
                 self.arm.jaw.servo_jp(np.array([1.0]))
-            elif msg.buttons.b:      # Button B → schließen
+            elif msg.buttons.b:      
                 self.arm.jaw.servo_jp(np.array([0.0]))
         except Exception as e:
             self.get_logger().error(f"Fehler beim Greifer: {e}")
-
-
-    """def daVinci_measured_jaw_callback(self, msg: JointState):
-        if msg.position:
-            self.current_jaw = msg.position[0]   # Greiferstellung speichern
-            self.get_logger().info(f"Current daVinci jaw position: {self.current_jaw:.3f}")
-        else:
-            self.get_logger().warning("jaw/measured_js enthält keine Position!")"""
 
 
     def set_reference_pose_arm(self, msg: HaplyState):
@@ -182,8 +165,8 @@ class HaplyToDaVinciBridge(Node):
         r_cal, p_cal, y_cal = calibrated_Rotation.GetRPY()
         
         # swap roll and pitch for daVinci
-        #new_Rotation = PyKDL.Rotation.RPY(r_cal  + dpitch, p_cal - droll, y_cal + dyaw) 
-        new_Rotation = PyKDL.Rotation.RPY(r_cal + droll, p_cal  + dpitch, y_cal + dyaw)
+        new_Rotation = PyKDL.Rotation.RPY(r_cal + dpitch, p_cal - droll, y_cal + dyaw) 
+        #new_Rotation = PyKDL.Rotation.RPY(r_cal + droll, p_cal + dpitch, y_cal + dyaw)
         target_daVinci_pose.M = new_Rotation
         
         # send target position to daVinci via CRTK
