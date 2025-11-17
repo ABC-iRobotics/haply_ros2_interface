@@ -30,9 +30,12 @@ class HotWire(Node):
             f"Hot Wire Visualization started"
         )
 
-        # Define start and end points of the wire in cartesian coordinates (unit: meters)
+        #----- Action needed! -------------------------------------------------------------------------------------------------
+        # Define wire start and end points (to be replaced with Topic data from /PSM1/local/measured_cp)
         self.wire_start = [-0.05, 0.0, -0.1]
         self.wire_end = [0.05, 0.025, -0.1]
+        #-------------------------------------------------------------------------------------------------------
+
         # Haptic stiffness and damping factors for virtual spring-damper system
         self.stiffness = 200.0
         self.damping = 0.0
