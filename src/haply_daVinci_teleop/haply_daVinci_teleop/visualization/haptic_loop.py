@@ -26,17 +26,17 @@ class HapticLoop(Node):
         self.create_subscription(PoseStamped, "/PSM1/local/measured_cp", self.gripper_callback, 10)
 
         # Parameter Loop
-        self.loop_radius = 0.005        # loop radius
-        self.loop_segments = 10         # number segments to approximate the circle (keep low for performance)
-        self.loop_thickness = 0.002     # cylinder diameter 2 mm
-        self.loop_x_offset = 0.00       # offset along gripper X axis
+        self.loop_radius = 0.005                    # loop radius
+        self.loop_segments = 10                     # number segments to approximate the circle (keep low for performance)
+        self.loop_thickness = 0.002                 # cylinder diameter 2 mm
+        self.loop_x_offset = 0.00                   # offset along gripper X axis
         self.loop_y_offset = 0.01+self.loop_radius  # offset along gripper Y axis
-        self.loop_z_offset = 0.00       # offset along gripper Z axis
+        self.loop_z_offset = 0.00                   # offset along gripper Z axis
 
         # Initialize variables
         self.gripper_pose_stamped = None
         self.gripper_pose_world = None
-        # TF buffer/listener for transforming to 'world'
+        # TF buffer/listener for transforming to world
         self.tf_buffer = tf2_ros.Buffer()
         self.tf_listener = tf2_ros.TransformListener(self.tf_buffer, self)
 
@@ -62,9 +62,9 @@ class HapticLoop(Node):
 
 
     def gripper_callback(self, msg: PoseStamped):
-        # keep full pose (including header.frame_id)
+        # keep full pose
         self.gripper_pose_stamped = msg
-        # try to transform into 'world' frame immediately (non-fatal)
+        # try to transform into world frame 
         try:
             if msg.header.frame_id != "world":
                 # lookup transform world <- msg.header.frame_id
@@ -74,7 +74,6 @@ class HapticLoop(Node):
             else:
                 self.gripper_pose_world = msg
         except Exception as e:
-            # TF not available yet — we keep gripper_pose_world None (will fallback)
             self.get_logger().debug(f"TF transform to 'world' failed: {e}")
             self.gripper_pose_world = None
 
@@ -85,12 +84,12 @@ class HapticLoop(Node):
         cross_y = qz * vector_x - qx * vector_z
         cross_z = qx * vector_y - qy * vector_x
 
-        # Multiply the cross product by 2 to form the intermediate vector t = 2 * (q_xyz × v)
+        # Multiply the cross product by 2 to form the intermediate vector 
         buffervector_x = 2.0 * cross_x
         buffervector_y = 2.0 * cross_y
         buffervector_z = 2.0 * cross_z
 
-        # Compute the final rotated vector using the formula: v' = v + qw * t + q_xyz × t
+        # Compute the final rotated vector 
         second_cross_x = qy * buffervector_z - qz * buffervector_y
         second_cross_y = qz * buffervector_x - qx * buffervector_z
         second_cross_z = qx * buffervector_y - qy * buffervector_x
@@ -191,6 +190,7 @@ class HapticLoop(Node):
         loop_center.pose.orientation.w = quaternion_gripper_w
 
         self.loop_center_pub.publish(loop_center)
+        self.get_logger().info(f"Loopcenter published at: {loop_center.pose.position.x},{loop_center.pose.position.y},{loop_center.pose.position.z}")
 
 
 def main(args=None):

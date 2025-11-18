@@ -32,8 +32,8 @@ class HotWire(Node):
 
         #----- Action needed! -------------------------------------------------------------------------------------------------
         # Define wire start and end points (to be replaced with Topic data from /PSM1/local/measured_cp)
-        self.wire_start = [-0.05, 0.0, -0.1]
-        self.wire_end = [0.05, 0.025, -0.1]
+        self.wire_start = [-0.0029, 0.00096, -0.1055]
+        self.wire_end = [0.0379, 0.0367, -0.0854]
         #-------------------------------------------------------------------------------------------------------
 
         # Haptic stiffness and damping factors for virtual spring-damper system
@@ -43,7 +43,7 @@ class HotWire(Node):
         self.inner_limit_deadzone = 0.001  
         self.outer_limit_deadzone = 0.005  
         # use force feedback toggle (True/False)
-        self.use_force_feedback = False
+        self.use_force_feedback = True
 
         self.get_logger().info(
             f"Haply Force Controller initialized: stiffness={self.stiffness}")
@@ -66,7 +66,8 @@ class HotWire(Node):
         # Create the force control message
         control_msg = HaplyControl()
         control_msg.use_position = False  
-        control_msg.force = Vector3(x=force[0], y=force[1], z=force[2])
+        # Attention: x and y direction is mirrored in haply frame!
+        control_msg.force = Vector3(x=-force[0], y=-force[1], z=force[2])
         control_msg.target_position = Point(x=0.0, y=0.0, z=0.0) # default   
 
         # Publish
@@ -94,7 +95,7 @@ class HotWire(Node):
 
         # projection onto wire to find closest point on the wire
         projection_length = sum(wirestart_to_loopcenter[i] * wire_direction[i] for i in range(3))
-        projection_length = max(0.0, min(wire_length, projection_length))  # clamp to segment
+        projection_length = max(0.0, min(wire_length, projection_length))  
 
         # calculate closest point on wire 
         closest_point = [
