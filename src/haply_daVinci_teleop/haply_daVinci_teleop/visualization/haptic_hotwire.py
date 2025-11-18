@@ -32,8 +32,8 @@ class HotWire(Node):
 
         #----- Action needed! -------------------------------------------------------------------------------------------------
         # Define wire start and end points (to be replaced with Topic data from /PSM1/local/measured_cp)
-        self.wire_start = [-0.0029, 0.00096, -0.1055]
-        self.wire_end = [0.0379, 0.0367, -0.0854]
+        self.wire_start = [0.05336933642327277, 0.1060587850461169, -0.1930198998342407]
+        self.wire_end = [-0.04229796174313339, 0.05390816785731771, -0.20952358011217756]
         #-------------------------------------------------------------------------------------------------------
 
         # Haptic stiffness and damping factors for virtual spring-damper system

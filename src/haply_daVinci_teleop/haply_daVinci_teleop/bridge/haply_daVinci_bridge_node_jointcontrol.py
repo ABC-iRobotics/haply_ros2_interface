@@ -133,7 +133,7 @@ class HaplyToDaVinciBridge(Node):
                     self.gripper_status = 1
                 else:
                     # close
-                    self.arm.jaw.servo_jp(np.array([0.0]))   
+                    self.arm.jaw.servo_jp(np.array([0.00]))   
                     self.gripper_status = 0
 
             # Update last state

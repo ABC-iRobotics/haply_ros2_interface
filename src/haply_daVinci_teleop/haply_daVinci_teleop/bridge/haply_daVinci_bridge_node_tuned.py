@@ -156,16 +156,16 @@ class HaplyToDaVinciBridge(Node):
         
         # calculate target position based on difference between current and reference position
         target_daVinci_pose = PyKDL.Frame(self.calibrated_daVinci_pose)
-        target_daVinci_pose.p[0] += dx
+        target_daVinci_pose.p[0] -= dx
         target_daVinci_pose.p[1] += dy
-        target_daVinci_pose.p[2] += dz
+        target_daVinci_pose.p[2] -= dz
 
         # get current orientation as RPY, add deltas, set new rotation
         calibrated_Rotation = target_daVinci_pose.M
         r_cal, p_cal, y_cal = calibrated_Rotation.GetRPY()
         
         # swap roll and pitch for daVinci
-        new_Rotation = PyKDL.Rotation.RPY(r_cal + dpitch, p_cal - droll, y_cal + dyaw) 
+        new_Rotation = PyKDL.Rotation.RPY(r_cal - dpitch, p_cal - droll, y_cal - dyaw) 
         #new_Rotation = PyKDL.Rotation.RPY(r_cal + droll, p_cal + dpitch, y_cal + dyaw)
         target_daVinci_pose.M = new_Rotation
         
