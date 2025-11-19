@@ -22,19 +22,15 @@ class HotWire(Node):
         # Subscriber
         self.state_subscriber = self.create_subscription(HaplyState,'haply_state', self.state_callback, 10)
         self.loop_subscription = self.create_subscription(PoseStamped,'loop_center', self.loop_center_callback, 10)
+        self.psm_cp_subscriber = self.create_subscription(PoseStamped, '/PSM1/local/measured_cp', self.psm_cp_callback, 10)
 
         # Timer for continuous visualization (10 Hz)
         self.marker_timer = self.create_timer(1 / 10, self.publish_wire_marker)
 
-        self.get_logger().info(
-            f"Hot Wire Visualization started"
-        )
-
-        #----- Action needed! -------------------------------------------------------------------------------------------------
-        # Define wire start and end points (to be replaced with Topic data from /PSM1/local/measured_cp)
-        self.wire_start = [0.05336933642327277, 0.1060587850461169, -0.1930198998342407]
-        self.wire_end = [-0.04229796174313339, 0.05390816785731771, -0.20952358011217756]
-        #-------------------------------------------------------------------------------------------------------
+        # Initialize button and wire state 
+        self.last_button_c = False
+        self.wire_start = None 
+        self.wire_end = None 
 
         # Haptic stiffness and damping factors for virtual spring-damper system
         self.stiffness = 200.0
@@ -45,12 +41,37 @@ class HotWire(Node):
         # use force feedback toggle (True/False)
         self.use_force_feedback = True
 
-        self.get_logger().info(
-            f"Haply Force Controller initialized: stiffness={self.stiffness}")
+        #self.get_logger().info(f"Haply Force Controller initialized: stiffness={self.stiffness} and damping={self.damping}")
+        self.get_logger().info(f"Hot Wire Visualization started. Waiting for measuring points...")
+        
+
+    def psm_cp_callback(self, msg: PoseStamped):
+        # Stores the most recent PSM1 TCP coordinate
+        self.current_psm_cp = [msg.pose.position.x, msg.pose.position.y, msg.pose.position.z]
 
 
-    def state_callback(self, msg):
-        # Extract device position
+    def state_callback(self, msg: HaplyState):
+        # Rising edge detection for button C
+        current = msg.buttons.c
+
+        if current and not self.last_button_c:   
+            if self.current_psm_cp is None:
+                self.get_logger().warning("No PSM position received yet!")
+            else:
+                if self.wire_start is None:
+                    self.wire_start = self.current_psm_cp.copy()
+                    self.get_logger().info(f"Wire START set to: {self.wire_start}")
+
+                elif self.wire_end is None:
+                    self.wire_end = self.current_psm_cp.copy()
+                    self.get_logger().info(f"Wire END set to: {self.wire_end}")
+
+                else:
+                    self.get_logger().info("Start and End are already set.")
+
+        # store last state
+        self.last_button_c = current
+
         haply_velocity = [msg.velocity.x, msg.velocity.y, msg.velocity.z]
         #self.get_logger().info(f"haply Velocity: x={haply_velocity[0]:.3f}, y={haply_velocity[1]:.3f}, z={haply_velocity[2]:.3f}")
 
@@ -128,7 +149,9 @@ class HotWire(Node):
 
     def publish_wire_marker(self):
         """Publishes a line marker representing the wire"""
-
+        if self.wire_start is None or self.wire_end is None:
+            return
+        
         # compute start / end scaled
         start_x = self.wire_start[0] 
         start_y = self.wire_start[1] 

@@ -5,7 +5,7 @@ from rclpy.node import Node
 from haply_msgs.msg import HaplyState
 from sensor_msgs.msg import JointState
 import crtk
-import PyKDL
+import PyKDL # type: ignore
 import math
 
 # class for using CRTK jaw operations

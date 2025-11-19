@@ -5,7 +5,7 @@ from rclpy.node import Node
 from haply_msgs.msg import HaplyState
 from geometry_msgs.msg import PoseStamped
 import crtk
-import PyKDL
+import PyKDL # type: ignore
 import math
 
 class JawOps:
