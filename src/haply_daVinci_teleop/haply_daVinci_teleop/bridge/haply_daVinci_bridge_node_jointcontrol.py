@@ -70,7 +70,7 @@ class HaplyToDaVinciBridge(Node):
 
         # Scale Haply Movements
         self.scale_arm_movement = 0.25   # position scale
-        self.rot_scale = 0.5             # orientation scale
+        self.rot_scale = 1.0             # orientation scale
 
         # joint indexes
         self.outer_yaw_index = 0
@@ -177,10 +177,12 @@ class HaplyToDaVinciBridge(Node):
                 current_haply_orientation.z,
                 current_haply_orientation.w
             )
-            r_cur, p_cur, y_cur = R_cur.GetRPY()
+            current_roll, current_pitch, current_yaw = R_cur.GetRPY()
+            #self.get_logger().info(f"Current Roll:{current_roll}, Current Pitch:{current_pitch}, Current Yaw:{current_yaw}")
+            self.get_logger().info(f"Current Yaw:{current_yaw}")
         except Exception as e:
             self.get_logger().debug(f"Failed to compute current RPY: {e}")
-            r_cur = p_cur = y_cur = 0.0
+            current_roll = current_pitch = current_yaw = 0.0
 
         try:
             R_cal = PyKDL.Rotation.Quaternion(
@@ -189,14 +191,14 @@ class HaplyToDaVinciBridge(Node):
                 calibrated_haply_orientation.z,
                 calibrated_haply_orientation.w
             )
-            r_cal, p_cal, y_cal = R_cal.GetRPY()
+            calibrated_roll, calibrated_pitch, calibrated_yaw = R_cal.GetRPY()
         except Exception:
-            r_cal = p_cal = y_cal = 0.0
+            calibrated_roll = calibrated_pitch = calibrated_yaw = 0.0
 
         # rotational deltas (scaled)
-        droll = (r_cur - r_cal) * self.rot_scale
-        dpitch = (p_cur - p_cal) * self.rot_scale
-        dyaw = (y_cur - y_cal) * self.rot_scale
+        droll = (current_roll - calibrated_roll) * self.rot_scale
+        dpitch = (current_pitch - calibrated_pitch) * self.rot_scale
+        dyaw = (current_yaw - calibrated_yaw) * self.rot_scale
 
         return dx, dy, dz, droll, dpitch, dyaw
 

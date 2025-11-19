@@ -54,6 +54,11 @@ class HaplyToDaVinciBridge(Node):
         # subscribe Haply data
         self.create_subscription(HaplyState, "haply_state", self.haply_state_callback, 10)
 
+        # initial gripper parameters
+        self.gripper_status = 0
+        self.last_button_a = False   
+        self.button_calibration = False  
+
         self.scale_arm_movement = 0.25
         self.rot_scale = 0.5  
         self.calibrated_haply_position = None
@@ -75,7 +80,9 @@ class HaplyToDaVinciBridge(Node):
     # callback function for Haply data (position, velocity, orientation, buttons)
     def haply_state_callback(self, msg: HaplyState):
         # check for calibration
-        if self.calibrated_haply_position is None or msg.buttons.c: 
+        if self.calibrated_haply_position is None or msg.buttons.b: 
+            if msg.buttons.b:
+                self.button_calibration = True
             self.set_reference_pose_arm(msg)
             return
         
@@ -85,15 +92,28 @@ class HaplyToDaVinciBridge(Node):
         self.send_target_daVinci_pose(dx, dy, dz, droll, dpitch, dyaw)
         self.control_jaw(msg)
 
+    # ---------- Gripper ----------
 
     def control_jaw(self, msg: HaplyState):
+        """ Control Gripper """
         try:
-            if msg.buttons.a:        
-                self.arm.jaw.servo_jp(np.array([1.0]))
-            elif msg.buttons.b:      
-                self.arm.jaw.servo_jp(np.array([0.0]))
+            current = msg.buttons.a
+            if current and not self.last_button_a:
+                # Toggle gripper state
+                if self.gripper_status == 0:
+                    # open
+                    self.arm.jaw.servo_jp(np.array([1.0]))   
+                    self.gripper_status = 1
+                else:
+                    # close
+                    self.arm.jaw.servo_jp(np.array([0.00]))   
+                    self.gripper_status = 0
+
+            # Update last state
+            self.last_button_a = current
+
         except Exception as e:
-            self.get_logger().error(f"Fehler beim Greifer: {e}")
+            self.get_logger().error(f"Grasp control failed: {e}")
 
 
     def set_reference_pose_arm(self, msg: HaplyState):
@@ -105,14 +125,8 @@ class HaplyToDaVinciBridge(Node):
         self.calibrated_daVinci_pose = PyKDL.Frame(self.daVinci_pose)
         # The current Haply position is set as an offset so that later movements are calculated relative to the daVinci start pose.
         self.calibrated_haply_position = msg.position  
-        self.calibrated_haply_orientation = msg.quaternion  
-
-        self.get_logger().info(
-            f"Haply calibrated to daVinci pose at: "
-            f"x={self.calibrated_daVinci_pose.p.x():.3f}, "
-            f"y={self.calibrated_daVinci_pose.p.y():.3f}, "
-            f"z={self.calibrated_daVinci_pose.p.z():.3f}"
-        )
+        if self.button_calibration == False:
+            self.calibrated_haply_orientation = msg.quaternion  
 
 
     # function to compute haply pose difference
@@ -122,20 +136,14 @@ class HaplyToDaVinciBridge(Node):
         dz = (current_haply_position.z - calibrated_haply_position.z) * self.scale_arm_movement
         
         try:
-            R_cur = PyKDL.Rotation.Quaternion(current_haply_orientation.x,
-                                              current_haply_orientation.y,
-                                              current_haply_orientation.z,
-                                              current_haply_orientation.w)
+            R_cur = PyKDL.Rotation.Quaternion(current_haply_orientation.x, current_haply_orientation.y, current_haply_orientation.z, current_haply_orientation.w)
             r_cur, p_cur, y_cur = R_cur.GetRPY()
         except Exception as e:
             self.get_logger().debug(f"Failed to compute current RPY: {e}")
             r_cur = p_cur = y_cur = 0.0
 
         try:
-            R_cal = PyKDL.Rotation.Quaternion(calibrated_haply_orientation.x,
-                                              calibrated_haply_orientation.y,
-                                              calibrated_haply_orientation.z,
-                                              calibrated_haply_orientation.w)
+            R_cal = PyKDL.Rotation.Quaternion(calibrated_haply_orientation.x, calibrated_haply_orientation.y, calibrated_haply_orientation.z, calibrated_haply_orientation.w)
             r_cal, p_cal, y_cal = R_cal.GetRPY()
         except Exception:
             r_cal = p_cal = y_cal = 0.0
@@ -144,6 +152,7 @@ class HaplyToDaVinciBridge(Node):
         droll = (r_cur - r_cal) * self.rot_scale
         dpitch = (p_cur - p_cal) * self.rot_scale
         dyaw = (y_cur - y_cal) * self.rot_scale
+        self.get_logger().info(f"droll={droll}, dpitch={dpitch}, dyaw={dyaw}")
 
         return dx, dy, dz, droll, dpitch, dyaw
 
