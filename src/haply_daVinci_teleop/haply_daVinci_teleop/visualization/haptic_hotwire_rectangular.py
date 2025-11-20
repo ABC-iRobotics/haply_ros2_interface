@@ -31,175 +31,183 @@ class HotWire(Node):
         self.last_button_c = False
         self.wire_points = []
 
-        # Haptic stiffness and damping factors for virtual spring-damper system
+        # Loop radius (unit: [m])
+        self.loop_radius = 0.011  
+
+        # Haptic stiffness and damping 
         self.stiffness = 200.0
         self.damping = 0.0
-        # define attraction zone (distance loopcenter from wire) 
+
+        # Attraction zone (distance wire-to-loop OUTER SURFACE)
         self.inner_limit_deadzone = 0.001  
         self.outer_limit_deadzone = 0.005  
-        # use force feedback toggle (True/False)
-        self.use_force_feedback = True
 
-        #self.get_logger().info(f"Haply Force Controller initialized: stiffness={self.stiffness} and damping={self.damping}")
+        self.use_force_feedback = True
+        self.current_psm_cp = None
         self.get_logger().info(f"Hot Wire Visualization started. Waiting for measuring points...")
         
-
+        
     def psm_cp_callback(self, msg: PoseStamped):
-        """Stores the most recent PSM1 TCP coordinate"""
         self.current_psm_cp = [msg.pose.position.x, msg.pose.position.y, msg.pose.position.z]
 
 
     def state_callback(self, msg: HaplyState):
-        # Rising edge detection for button C
-        current = msg.buttons.c
+        """ Receive Haply State """
+        current_button_state = msg.buttons.c
 
-        if current and not self.last_button_c:
+        if current_button_state and not self.last_button_c:
             if self.current_psm_cp is None:
                 self.get_logger().warning("No PSM position received yet!")
             else:
                 self.wire_points.append(self.current_psm_cp.copy())
-                self.get_logger().info(f"Added point {len(self.wire_points)} / {self.current_psm_cp}")
-
-        self.last_button_c = current
-
-        haply_velocity = [msg.velocity.x, msg.velocity.y, msg.velocity.z]
-        #self.get_logger().info(f"haply Velocity: x={haply_velocity[0]:.3f}, y={haply_velocity[1]:.3f}, z={haply_velocity[2]:.3f}")
+                self.get_logger().info(
+                    f"Added point {len(self.wire_points)} / {self.current_psm_cp}"
+                )
+        self.last_button_c = current_button_state
 
 
     def loop_center_callback(self, msg: PoseStamped):
-        """Callback to update wire position based on loop center"""
+        """ Measure loop position, calculate distance and force and publish. """
+        loop_center_position = [msg.pose.position.x, msg.pose.position.y, msg.pose.position.z]
+        force_vector = self.compute_haptic_force(loop_center_position)
 
-        # Extract device position
-        device_position = [msg.pose.position.x, msg.pose.position.y, msg.pose.position.z]
-        # Compute the haptic force
-        force = self.compute_haptic_force(device_position)
-
-        # Create the force control message
         control_msg = HaplyControl()
         control_msg.use_position = False  
-        # Attention: x and y direction is mirrored in haply frame!
-        control_msg.force = Vector3(x=-force[0], y=-force[1], z=force[2])
-        control_msg.target_position = Point(x=0.0, y=0.0, z=0.0) # default   
+        control_msg.force = Vector3(
+            x=-force_vector[0],
+            y=-force_vector[1],
+            z=force_vector[2]
+        )
+        control_msg.target_position = Point(x=0.0, y=0.0, z=0.0)
 
-        # Publish
         self.force_publisher.publish(control_msg)
-        self.get_logger().info(f"Published Force: x={force[0]:.3f}, y={force[1]:.3f}, z={force[2]:.3f}")
+        self.get_logger().info(
+            f"Published Force: x={force_vector[0]:.3f}, y={force_vector[1]:.3f}, z={force_vector[2]:.3f}"
+        )
 
 
-    def compute_haptic_force(self, device_position):
-        """Compute attractive force pulling the loop center toward the wire when distance is between deadzone and loop."""
-
+    def compute_haptic_force(self, loop_center_position):
+        """ Compute haptic force using the distance from loopcenter to wire and velocity of haply """
         if len(self.wire_points) < 2:
-            return [0.0,0.0,0.0]
-
-        closest_force = None
-        closest_dist = 999
-
-        # Loop over all segments
-        for i in range(len(self.wire_points)):
-            if i == len(self.wire_points)-1:
-                # Close shape if polygon
-                p1 = self.wire_points[i]
-                p2 = self.wire_points[0]
-            else:
-                p1 = self.wire_points[i]
-                p2 = self.wire_points[i+1]
-
-            force, dist = self.compute_force_on_segment(device_position, p1, p2)
-
-            if dist < closest_dist:
-                closest_dist = dist
-                closest_force = force
-
-        if closest_force is None:
             return [0.0, 0.0, 0.0]
-        return [float(closest_force[0]), float(closest_force[1]), float(closest_force[2])]
 
-        
+        closest_force_vector = None
+        closest_distance = 999
 
-    def compute_force_on_segment(self, loopcenter_position, wire_start, wire_end):
-        wire_vector = [wire_end[i] - wire_start[i] for i in range(3)]
-        wire_length = math.sqrt(sum(v*v for v in wire_vector))
-        if wire_length < 1e-6:
-            return [0.0,0.0,0.0], 999.0
+        for idx in range(len(self.wire_points)):
+            if idx == len(self.wire_points)-1:
+                wire_start_point = self.wire_points[idx]
+                wire_end_point = self.wire_points[0]
+            else:
+                wire_start_point = self.wire_points[idx]
+                wire_end_point = self.wire_points[idx+1]
 
-        wire_dir = [v / wire_length for v in wire_vector]
+            force_vector, segment_distance = self.compute_force_on_segment(loop_center_position, wire_start_point, wire_end_point)
 
-        w2l = [loopcenter_position[i] - wire_start[i] for i in range(3)]
-        proj = sum(w2l[i] * wire_dir[i] for i in range(3))
-        proj = max(0.0, min(wire_length, proj))
+            if segment_distance < closest_distance:
+                closest_distance = segment_distance
+                closest_force_vector = force_vector
 
-        closest = [wire_start[i] + proj * wire_dir[i] for i in range(3)]
-        diff = [closest[i] - loopcenter_position[i] for i in range(3)]
-        dist = math.sqrt(sum(v*v for v in diff))
+        if closest_force_vector is None:
+            return [0.0, 0.0, 0.0]
 
-        if dist < self.inner_limit_deadzone or dist > self.outer_limit_deadzone:
-            return [0.0,0.0,0.0], float(dist)
+        return [
+            float(closest_force_vector[0]),
+            float(closest_force_vector[1]),
+            float(closest_force_vector[2])
+        ]
 
-        direction = [d/dist for d in diff]
-        force = [direction[i] * self.stiffness * dist for i in range(3)]
 
-        return force, dist
+    def compute_force_on_segment(self, loop_center_position, wire_start_point, wire_end_point):
+
+        wire_segment_vector = [wire_end_point[i] - wire_start_point[i] for i in range(3)]
+        wire_segment_length = math.sqrt(sum(v*v for v in wire_segment_vector))
+
+        if wire_segment_length < 1e-6:
+            return [0.0, 0.0, 0.0], 999.0
+
+        wire_direction_unit = [v / wire_segment_length for v in wire_segment_vector]
+        loop_to_wire_vector = [loop_center_position[i] - wire_start_point[i] for i in range(3)]
+
+        projection_length = sum(loop_to_wire_vector[i] * wire_direction_unit[i] for i in range(3))
+        projection_length = max(0.0, min(wire_segment_length, projection_length))
+
+        closest_point_on_wire = [wire_start_point[i] + projection_length * wire_direction_unit[i] for i in range(3)]
+        vector_wire_to_loop = [loop_center_position[i] - closest_point_on_wire[i] for i in range(3)]
+        distance_center_to_wire = math.sqrt(sum(v*v for v in vector_wire_to_loop))
+
+        # subtract loop radius
+        effective_distance = distance_center_to_wire - self.loop_radius
+
+        if effective_distance < self.inner_limit_deadzone or effective_distance > self.outer_limit_deadzone:
+            return [0.0, 0.0, 0.0], effective_distance
+
+        normalized_dir = [vector_wire_to_loop[i] / distance_center_to_wire for i in range(3)]
+
+        force_vector = [normalized_dir[i] * self.stiffness * effective_distance for i in range(3)]
+
+        return force_vector, effective_distance
 
 
     def publish_wire_marker(self):
-
         if len(self.wire_points) < 2:
             return
 
-        # If polygon closed (4 points)
-        closed = False
-        if len(self.wire_points) >= 4:
-            closed = True
+        is_closed_polygon = len(self.wire_points) >= 4
 
-        # Publish one CYLINDER per segment
-        marker_array = []
-
-        for i in range(len(self.wire_points)):
-            if i == len(self.wire_points)-1:
-                if closed:
-                    p1 = self.wire_points[i]
-                    p2 = self.wire_points[0]
-                else:
+        for idx in range(len(self.wire_points)):
+            if idx == len(self.wire_points)-1:
+                if not is_closed_polygon:
                     break
+                point_start = self.wire_points[idx]
+                point_end   = self.wire_points[0]
             else:
-                p1 = self.wire_points[i]
-                p2 = self.wire_points[i+1]
+                point_start = self.wire_points[idx]
+                point_end   = self.wire_points[idx+1]
 
-            sx, sy, sz = p1
-            ex, ey, ez = p2
+            start_x, start_y, start_z = point_start
+            end_x,   end_y,   end_z   = point_end
 
-            dx = ex - sx
-            dy = ey - sy
-            dz = ez - sz
+            delta_x = end_x - start_x
+            delta_y = end_y - start_y
+            delta_z = end_z - start_z
 
-            length = math.sqrt(dx*dx + dy*dy + dz*dz)
-            if length < 1e-6:
+            segment_length = math.sqrt(delta_x**2 + delta_y**2 + delta_z**2)
+            if segment_length < 1e-6:
                 continue
 
-            direction = (dx/length, dy/length, dz/length)
-            mid = ((sx+ex)/2, (sy+ey)/2, (sz+ez)/2)
+            direction_unit = (
+                delta_x / segment_length,
+                delta_y / segment_length,
+                delta_z / segment_length
+            )
 
-            qx,qy,qz,qw = self.quat_from_two_vectors((0,0,1), direction)
+            midpoint = (
+                (start_x + end_x) / 2,
+                (start_y + end_y) / 2,
+                (start_z + end_z) / 2
+            )
+
+            quat_x, quat_y, quat_z, quat_w = self.quat_from_two_vectors((0,0,1), direction_unit)
 
             marker = Marker()
             marker.header.frame_id = "world"
             marker.header.stamp = self.get_clock().now().to_msg()
             marker.ns = "hot_wire"
-            marker.id = i
+            marker.id = idx
             marker.type = Marker.CYLINDER
             marker.action = Marker.ADD
-            marker.pose.position.x = mid[0]
-            marker.pose.position.y = mid[1]
-            marker.pose.position.z = mid[2]
-            marker.pose.orientation.x = qx
-            marker.pose.orientation.y = qy
-            marker.pose.orientation.z = qz
-            marker.pose.orientation.w = qw
+            marker.pose.position.x = midpoint[0]
+            marker.pose.position.y = midpoint[1]
+            marker.pose.position.z = midpoint[2]
+            marker.pose.orientation.x = quat_x
+            marker.pose.orientation.y = quat_y
+            marker.pose.orientation.z = quat_z
+            marker.pose.orientation.w = quat_w
 
             marker.scale.x = 0.002
             marker.scale.y = 0.002
-            marker.scale.z = length
+            marker.scale.z = segment_length
 
             marker.color.r = 1.0
             marker.color.g = 0.0
@@ -210,39 +218,35 @@ class HotWire(Node):
 
 
     def quat_from_two_vectors(self, vector_from, vector_to):
-        """ returns (x,y,z,w) quaternion rotating vector_from to vector_to """
         from_x, from_y, from_z = vector_from
         to_x, to_y, to_z = vector_to
 
-        # calculate cross product for rotation axis
         cross_x = from_y * to_z - from_z * to_y
         cross_y = from_z * to_x - from_x * to_z
         cross_z = from_x * to_y - from_y * to_x
 
-        # calculate scalar product
         dot_product = from_x*to_x + from_y*to_y + from_z*to_z
-        # Normal of cross product axis
-        cross_norm = math.sqrt(cross_x*cross_x + cross_y*cross_y + cross_z*cross_z)
+        cross_norm = math.sqrt(cross_x**2 + cross_y**2 + cross_z**2)
 
         if cross_norm < 1e-6:
-            # parallel or anti-parallel
             if dot_product > 0.9999:
                 return (0.0, 0.0, 0.0, 1.0)
             else:
-                # 180 deg rotation about X (arbitrary orthogonal axis)
                 return (1.0, 0.0, 0.0, 0.0)
         
-        # rotation axis 
-        rotation_axis = (cross_x / cross_norm, cross_y / cross_norm, cross_z / cross_norm)
+        rotation_axis = (
+            cross_x / cross_norm,
+            cross_y / cross_norm,
+            cross_z / cross_norm
+        )
 
-        # rotation angle
         rotation_angle = math.atan2(cross_norm, dot_product)
         sin_half = math.sin(rotation_angle/2.0)
-        qx = rotation_axis[0] * sin_half
-        qy = rotation_axis[1] * sin_half
-        qz = rotation_axis[2] * sin_half
-        qw = math.cos(rotation_angle/2.0)
-        return (qx, qy, qz, qw)
+        quat_x = rotation_axis[0] * sin_half
+        quat_y = rotation_axis[1] * sin_half
+        quat_z = rotation_axis[2] * sin_half
+        quat_w = math.cos(rotation_angle/2.0)
+        return (quat_x, quat_y, quat_z, quat_w)
 
 
 def main(args=None):
@@ -259,3 +263,4 @@ def main(args=None):
 
 if __name__ == "__main__":
     main()
+
