@@ -32,15 +32,17 @@ class HotWire(Node):
         self.wire_points = []
 
         # Loop radius (unit: [m])
-        self.loop_radius = 0.011  
+        self.loop_radius = 0.0 #0.011  
+        # Distance from Haply tip to PSM1 base (unit: [m])
+        self.distance_tip_to_PSM1_base = 0.01
 
         # Haptic stiffness and damping 
-        self.stiffness = 200.0
+        self.stiffness = 80.0
         self.damping = 0.0
 
-        # Attraction zone (distance wire-to-loop OUTER SURFACE)
+        # Attraction zone (distance wire-to-loop center, unit: [m])
         self.inner_limit_deadzone = 0.001  
-        self.outer_limit_deadzone = 0.005  
+        self.outer_limit_deadzone = 0.012  
 
         self.use_force_feedback = True
         self.current_psm_cp = None
@@ -64,6 +66,8 @@ class HotWire(Node):
                     f"Added point {len(self.wire_points)} / {self.current_psm_cp}"
                 )
         self.last_button_c = current_button_state
+        self.velocity = [msg.velocity.x, msg.velocity.y, msg.velocity.z]
+        self.get_logger().info(f"velocity: x={self.velocity[0]:.3f}, y={self.velocity[1]:.3f}, z={self.velocity[2]:.3f}")
 
 
     def loop_center_callback(self, msg: PoseStamped):
@@ -74,16 +78,14 @@ class HotWire(Node):
         control_msg = HaplyControl()
         control_msg.use_position = False  
         control_msg.force = Vector3(
-            x=-force_vector[0],
-            y=-force_vector[1],
-            z=force_vector[2]
+            x=force_vector[0],
+            y=force_vector[1],
+            z=-force_vector[2]
         )
         control_msg.target_position = Point(x=0.0, y=0.0, z=0.0)
 
         self.force_publisher.publish(control_msg)
-        self.get_logger().info(
-            f"Published Force: x={force_vector[0]:.3f}, y={force_vector[1]:.3f}, z={force_vector[2]:.3f}"
-        )
+        #self.get_logger().info(f"Published Force: x={force_vector[0]:.3f}, y={force_vector[1]:.3f}, z={force_vector[2]:.3f}")
 
 
     def compute_haptic_force(self, loop_center_position):
@@ -137,15 +139,14 @@ class HotWire(Node):
         distance_center_to_wire = math.sqrt(sum(v*v for v in vector_wire_to_loop))
 
         # subtract loop radius
-        effective_distance = distance_center_to_wire - self.loop_radius
+        effective_distance = distance_center_to_wire + self.loop_radius
+        #self.get_logger().info(f"effective distance: {effective_distance:.4f} m")
 
         if effective_distance < self.inner_limit_deadzone or effective_distance > self.outer_limit_deadzone:
             return [0.0, 0.0, 0.0], effective_distance
 
         normalized_dir = [vector_wire_to_loop[i] / distance_center_to_wire for i in range(3)]
-
         force_vector = [normalized_dir[i] * self.stiffness * effective_distance for i in range(3)]
-
         return force_vector, effective_distance
 
 

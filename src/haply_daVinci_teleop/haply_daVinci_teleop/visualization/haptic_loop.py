@@ -26,7 +26,7 @@ class HapticLoop(Node):
         self.create_subscription(PoseStamped, "/PSM1/local/measured_cp", self.gripper_callback, 10)
 
         # Parameter Loop
-        self.loop_radius = 0.005                    # loop radius
+        self.loop_radius = 0.011                    # loop radius
         self.loop_segments = 10                     # number segments to approximate the circle (keep low for performance)
         self.loop_thickness = 0.002                 # cylinder diameter 2 mm
         self.loop_x_offset = 0.00                   # offset along gripper X axis
