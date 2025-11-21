@@ -36,9 +36,10 @@ class HotWire(Node):
         # Distance from Haply tip to PSM1 base (unit: [m])
         self.distance_tip_to_PSM1_base = 0.01
 
-        # Haptic stiffness and damping 
-        self.stiffness = 80.0
-        self.damping = 0.0
+        # Haptic stiffness and damping
+        # tested working combinations: 80.0/2.0, 160/3.0
+        self.stiffness = 160.0
+        self.damping = 3.0
 
         # Attraction zone (distance wire-to-loop center, unit: [m])
         self.inner_limit_deadzone = 0.001  
@@ -66,7 +67,7 @@ class HotWire(Node):
                     f"Added point {len(self.wire_points)} / {self.current_psm_cp}"
                 )
         self.last_button_c = current_button_state
-        self.velocity = [msg.velocity.x, msg.velocity.y, msg.velocity.z]
+        self.velocity = [msg.velocity.x, msg.velocity.y, -msg.velocity.z]
         self.get_logger().info(f"velocity: x={self.velocity[0]:.3f}, y={self.velocity[1]:.3f}, z={self.velocity[2]:.3f}")
 
 
@@ -146,7 +147,7 @@ class HotWire(Node):
             return [0.0, 0.0, 0.0], effective_distance
 
         normalized_dir = [vector_wire_to_loop[i] / distance_center_to_wire for i in range(3)]
-        force_vector = [normalized_dir[i] * self.stiffness * effective_distance for i in range(3)]
+        force_vector = [normalized_dir[i] * self.stiffness * effective_distance - self.velocity[i] * self.damping for i in range(3)]
         return force_vector, effective_distance
 
 
