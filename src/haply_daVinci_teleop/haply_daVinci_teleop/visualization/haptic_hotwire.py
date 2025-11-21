@@ -99,8 +99,7 @@ class HotWire(Node):
 
         for idx in range(len(self.wire_points)):
             if idx == len(self.wire_points)-1:
-                wire_start_point = self.wire_points[idx]
-                wire_end_point = self.wire_points[0]
+                break
             else:
                 wire_start_point = self.wire_points[idx]
                 wire_end_point = self.wire_points[idx+1]
@@ -159,10 +158,7 @@ class HotWire(Node):
 
         for idx in range(len(self.wire_points)):
             if idx == len(self.wire_points)-1:
-                if not is_closed_polygon:
-                    break
-                point_start = self.wire_points[idx]
-                point_end   = self.wire_points[0]
+                break
             else:
                 point_start = self.wire_points[idx]
                 point_end   = self.wire_points[idx+1]
