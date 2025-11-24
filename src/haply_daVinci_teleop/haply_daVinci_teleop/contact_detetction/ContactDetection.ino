@@ -1,13 +1,14 @@
-const int hotwirePin = 2;
+// Script for contact detection using an ESP32
+const int hotwirePin = 25;   
 
 bool timerRunning = false;
 unsigned long startTime = 0;
-unsigned long lastContactTime = 0;    
+unsigned long lastContactTime = 0;
 int touchCounter = 0;
 
 void setup() {
-  Serial.begin(9600);
-  pinMode(hotwirePin, INPUT_PULLUP);
+  Serial.begin(115200);              
+  pinMode(hotwirePin, INPUT_PULLUP); 
 }
 
 void loop() {
@@ -16,22 +17,20 @@ void loop() {
   unsigned long now = millis();
 
   if (state == LOW) {  
-    // Check 0.5s lockout
+    // Lockout of 0.5 seconds
     if (!timerRunning && (now - lastContactTime > 500)) {
       timerRunning = true;
       startTime = now;
-      lastContactTime = now;     
+      lastContactTime = now;
 
       touchCounter++;
       Serial.println("Contact!");
-      Serial.print("Number of contacts: ");
-      Serial.println(touchCounter);
+      Serial.printf("Number of contacts: %d\n", touchCounter);
     }
-  }  
-
-  else {               
+  } 
+  else {
     timerRunning = false;
   }
 
-  delay(5);
+  delay(10);
 }

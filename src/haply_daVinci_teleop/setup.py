@@ -20,8 +20,9 @@ setup(
     tests_require=['pytest'],
     entry_points={
         'console_scripts': [
-            'haply_to_davinci_bridge = haply_daVinci_teleop.bridge.haply_to_daVinci_bridge_node:main',
+            'haply_bridge_jointcontrol = haply_daVinci_teleop.bridge.haply_daVinci_bridge_node_jointcontrol:main',
             'haptic_ball_visualization = haply_daVinci_teleop.visualization.haptic_ball:main',      
+            'haptic_loop = haply_daVinci_teleop.visualization.haptic_loop:main',
         ],
     },
 )
