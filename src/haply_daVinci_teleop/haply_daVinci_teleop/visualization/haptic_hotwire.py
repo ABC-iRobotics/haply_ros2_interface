@@ -36,6 +36,12 @@ class HotWire(Node):
         # Distance from Haply tip to PSM1 base (unit: [m])
         self.distance_tip_to_PSM1_base = 0.01
 
+        # choose mode (0 = off, 1 = linear, 2 = linear step)
+        self.force_feedback_mode = 1
+        # choose wirepoints source
+        self.measure_wirepoints_mode = False
+        # predefined wirepoints 
+        self.given_wirepoints = [[0.0, 0.05, -0.13], [0.0, 0.09, -0.13], [0.05, 0.09, -0.10]]
         # Haptic stiffness and damping
         # tested working combinations: 80.0/2.0, 160/3.0
         self.stiffness = 160.0
@@ -44,6 +50,7 @@ class HotWire(Node):
         # Attraction zone (distance wire-to-loop center, unit: [m])
         self.inner_limit_deadzone = 0.001  
         self.outer_limit_deadzone = 0.012  
+        self.midzone = (self.inner_limit_deadzone + self.outer_limit_deadzone) / 2.0
 
         self.use_force_feedback = True
         self.current_psm_cp = None
@@ -58,17 +65,21 @@ class HotWire(Node):
         """ Receive Haply State """
         current_button_state = msg.buttons.c
 
-        if current_button_state and not self.last_button_c:
+        if self.measure_wirepoints_mode == True and current_button_state and not self.last_button_c:
             if self.current_psm_cp is None:
                 self.get_logger().warning("No PSM position received yet!")
             else:
                 self.wire_points.append(self.current_psm_cp.copy())
-                self.get_logger().info(
-                    f"Added point {len(self.wire_points)} / {self.current_psm_cp}"
-                )
+                self.get_logger().info(f"Added point {len(self.wire_points)} / {self.current_psm_cp}")
+
+        elif self.measure_wirepoints_mode == False:
+            if len(self.wire_points) == 0:
+                self.wire_points = self.given_wirepoints.copy()
+                self.get_logger().info("Loaded predefined wire points.")
+
         self.last_button_c = current_button_state
         self.velocity = [msg.velocity.x, msg.velocity.y, -msg.velocity.z]
-        self.get_logger().info(f"velocity: x={self.velocity[0]:.3f}, y={self.velocity[1]:.3f}, z={self.velocity[2]:.3f}")
+        #self.get_logger().info(f"velocity: x={self.velocity[0]:.3f}, y={self.velocity[1]:.3f}, z={self.velocity[2]:.3f}")
 
 
     def loop_center_callback(self, msg: PoseStamped):
@@ -146,8 +157,31 @@ class HotWire(Node):
             return [0.0, 0.0, 0.0], effective_distance
 
         normalized_dir = [vector_wire_to_loop[i] / distance_center_to_wire for i in range(3)]
-        force_vector = [normalized_dir[i] * self.stiffness * effective_distance - self.velocity[i] * self.damping for i in range(3)]
+
+        if self.force_feedback_mode == 0:
+            force_vector = [0.0, 0.0, 0.0]
+        elif self.force_feedback_mode == 1:
+            force_vector = [normalized_dir[i] * self.stiffness * effective_distance - self.velocity[i] * self.damping for i in range(3)]
+        elif self.force_feedback_mode == 2:
+            # calculate force stepwise. First half of the zone: low force, second half: high force. There should be no step at the boundary.
+            k1 = self.stiffness * 0.5
+            delta1 = self.midzone - self.inner_limit_deadzone
+            delta2 = self.outer_limit_deadzone - self.midzone
+            target_force_outer = self.stiffness * self.outer_limit_deadzone  # Mode 1 force at outer limit
+            k2 = (target_force_outer - k1 * delta1) / delta2
+            
+            if effective_distance <= self.midzone:
+                force_magnitude = k1 * (effective_distance - self.inner_limit_deadzone)
+            else:
+                force_offset = k1 * (self.midzone - self.inner_limit_deadzone)
+                force_magnitude = force_offset + k2 * (effective_distance - self.midzone)
+            force_magnitude = max(force_magnitude, 0.0)
+            force_vector = [normalized_dir[i] * force_magnitude - self.velocity[i] * self.damping for i in range(3)]
+        else:
+            self.get_logger().info("Please select a valid force-mode.")
+
         return force_vector, effective_distance
+    
 
 
     def publish_wire_marker(self):
