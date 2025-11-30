@@ -27,7 +27,8 @@ This implementation was tested on:
 ## Package structure
 
 ### Bridge:
-The Bridge is used to transform the Movements of the Haply to the Movements of the daVinci PSM1 arm. It also implemented a clutch feature and steering of the gripper. The use the dvrk crtk messages. For further information visit this website: link
+The bridge enables the translation of movements from the Haply device to the da Vinci PSM1 arm. It also incorporates a clutch mechanism as well as gripper control. Communication is based on dVRK CRTK messages.
+For more detailed information, please refer to the following [webpage](https://dvrk.readthedocs.io/2.3.0/pages/development/api/introduction.html)
 
  #### haply_daVinci_bridge_node_jointcontrol.py
  ---
@@ -35,21 +36,14 @@ This ROS2 node maps Haply haptic device inputs to da Vinci PSM1 robot joint comm
 
 #### Features
 - Reads HaplyState for position, orientation and button presses
-- Reads da Vinci joint states via /PSM1/measured_js
+- Reads da Vinci joint states via `/PSM1/measured_js`
 - Computes Cartesian and rotational deltas relative to a calibrated reference position
 - Sends joint commands using CRTK servo_jp and servo_cp
 - Button A: toggles gripper open/close
-- Button B: clutching (reset reference position without full recalibration)
+- Button B: clutching (freezes robot position while pressing)
 
 #### Usage
-    ros2 run <package_name> haply_to_davinci_bridge.py
-    
-#### Workflow
-1. Node starts, da Vinci arm is enabled and homed.
-2. First received HaplyState sets calibration (position + orientation).
-3. Haply motion is translated into da Vinci joint commands.
-4. Button B resets reference position without affecting orientation (clutching).
-5. Button A toggles gripper open/close. 
+    ros2 run haply_daVinci_teleop haply_to_davinci_bridge.py
 
 #### Notes
 - Calibration occurs once at startup when the first HaplyState arrives.
@@ -64,21 +58,14 @@ This ROS2 node uses Cartesian control and maps Haply position/orientation offset
 #### Features
 - PSM control from Haply Cartesian motion
 - Calibration via Haply Button B
-- First B press → position + orientation reference
-- Subsequent B press → position-only recalibration
+- First B press: position + orientation reference
+- Subsequent B press: position-only recalibration
 - Haply Button A toggles gripper open/close
 - Adjustable scaling factors
 
 #### Usage
-```bash
-ros2 run haply_daVinci_teleop haply_to_davinci_pose.py
-```
+    ros2 run haply_daVinci_teleop haply_to_davinci_pose.py
 
-#### Workflow
-1) Wait for first Haply and daVinci pose
-2) Button B: calibration (full then position-only)
-3) Motion input: pose delta: sent to PSM1
-4) Button A: toggles jaw state
 ---
 
 ### Haptic_visualization
@@ -104,21 +91,17 @@ This ROS2 node visualizes a straight wire (as a cylinder) and provides haptic fe
 - `haply_target` (`HaplyControl`): Publishes haptic force commands to Haply.
 
 #### Usage
-1. Launch ROS2 and ensure the Haply device is connected.
-2. Start the HotWire node:
-    ```bash
-    ros2 run <package_name> hot_wire_node
-    ```
+    ros2 run haply_daVinci_teleop hot_wire_node
 
 #### haptic_loop.py
 ---
 
 #### Overview
-This ROS2 node visualizes a loop attached to the PSM1 gripper using a single `Marker` in RViz and publishes the loop's center pose. It is designed for haptic interaction experiments, allowing visualization and tracking of the loop in the world frame.
+This ROS2 node visualizes a loop attached to the PSM1 gripper using a single Marker in RViz and publishes the loop's center pose. It is designed for haptic interaction experiments, allowing visualization and tracking of the loop in the world frame.
 
 #### Features
 - Visualizes the loop in RViz as a LINE_STRIP marker.
-- Publishes the loop's center pose as `PoseStamped` on `loop_center`.
+- Publishes the loop's center pose as PoseStamped on loop_center.
 - Automatically transforms gripper pose to the world frame for consistent visualization.
 - Supports loop radius, thickness, offsets, and segmentation configuration.
 - Applies additional rotation to align the loop plane with the gripper jaws.
@@ -131,9 +114,8 @@ This ROS2 node visualizes a loop attached to the PSM1 gripper using a single `Ma
 #### Usage
 1. Launch ROS2 and ensure the PSM1 gripper node is running.
 2. Start the HapticLoop node:
-   ```bash
-   ros2 run <package_name> haptic_loop_node
-    ```
+   ros2 run haply_daVinci_teleop haptic_loop_node
+    
 ---
 ### Contact Detection
 To detect loop-wire contacts it is recommended to use a ESP32 development board. The following script can be flashed on the ESP board using the Arduino IDE.
@@ -162,7 +144,7 @@ This script runs on an ESP32 and detects contacts with a hotwire using a digital
 
 #### Notes
 - The script uses a simple debounce/lockout mechanism to prevent multiple triggers from a single touch.
-- Adjust the lockout duration by changing the `500` ms value in the `if` statement if needed.
+- Adjust the lockout duration by changing the 500 ms value in the if statement if needed.
 - The script uses a 10 ms loop delay to reduce CPU usage.
 ---
 
@@ -248,9 +230,8 @@ To run the ESP32 connect pin G25 with a resistance (100 ohm recommended) in seri
 
 - Optinaly start a rosbag to collect data:
 For collecting data it is recommended to use a rosbag. You can start one with the following command:
-    ```bash
+    
     ros2 bag record -o /home/lorant/Desktop/Haply_study_rosbags/Participant5_mode0_round2 /haply_target /hotwire_marker /haply_state /loop_center /PSM1/local/measured_cp
-    ```
 
 This rosbag records the positions of loop, wire and robot as well es the Haply data which also contains the calculated force.
 
