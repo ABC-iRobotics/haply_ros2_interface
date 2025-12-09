@@ -1,16 +1,15 @@
 #!/usr/bin/env python3
-
 import rclpy
 from rclpy.node import Node
 from rclpy.duration import Duration
 import math
 import tf2_ros
 import tf2_geometry_msgs
-
+import crtk
 from visualization_msgs.msg import Marker
 from geometry_msgs.msg import Point, PoseStamped, TransformStamped
+from sensor_msgs.msg import JointState
 from tf2_ros.static_transform_broadcaster import StaticTransformBroadcaster
-
 
 class HapticLoop(Node):
     """Visualizes a loop attached to the PSM1 gripper using a single Marker"""
@@ -23,7 +22,8 @@ class HapticLoop(Node):
         self.loop_center_pub = self.create_publisher(PoseStamped, "loop_center", 10)
 
         # Subscriber for PSM1 pose
-        self.create_subscription(PoseStamped, "/PSM1/local/measured_cp", self.gripper_callback, 10)
+        self.create_subscription(PoseStamped, "/PSM1/local/measured_cp", self.arm_callback, 10)
+        self.create_subscription(JointState, "/PSM1/jaw/measured_js", self.gripper_callback, 10)
 
         # Parameter Loop
         self.loop_radius = 0.011                    # loop radius
@@ -61,9 +61,25 @@ class HapticLoop(Node):
         self.get_logger().info("Haptic Loop Visualization initialized.")
 
 
-    def gripper_callback(self, msg: PoseStamped):
+    def gripper_callback(self, msg: JointState):
+        # Read gripper jaw position 
+        jaw_pos = msg.position
+        if jaw_pos is not None and len(jaw_pos) > 0:
+            self.get_logger().info(f"Actual gripper state: {jaw_pos[0]}")
+        else:
+            self.get_logger().info("No gripper state available.")
+        if jaw_pos[0] < 0.5:
+            # gripper closed -> hide loop by setting radius to zero
+            self.loop_radius = 0.011
+        else:
+            # gripper open -> set loop radius
+            self.loop_radius = 0.0
+        
+
+    def arm_callback(self, msg: PoseStamped):
         # keep full pose
         self.gripper_pose_stamped = msg
+
         # try to transform into world frame 
         try:
             if msg.header.frame_id != "world":
@@ -190,7 +206,7 @@ class HapticLoop(Node):
         loop_center.pose.orientation.w = quaternion_gripper_w
 
         self.loop_center_pub.publish(loop_center)
-        self.get_logger().info(f"Loopcenter published at: {loop_center.pose.position.x},{loop_center.pose.position.y},{loop_center.pose.position.z}")
+        #self.get_logger().info(f"Loopcenter published at: {loop_center.pose.position.x},{loop_center.pose.position.y},{loop_center.pose.position.z}")
 
 
 def main(args=None):

@@ -7,6 +7,7 @@ import math
 from visualization_msgs.msg import Marker
 from geometry_msgs.msg import PoseStamped, Vector3, Point
 from haply_msgs.msg import HaplyState, HaplyControl
+from sensor_msgs.msg import JointState
 
 
 class HotWire(Node):
@@ -23,12 +24,14 @@ class HotWire(Node):
         self.state_subscriber = self.create_subscription(HaplyState,'haply_state', self.state_callback, 10)
         self.loop_subscription = self.create_subscription(PoseStamped,'loop_center', self.loop_center_callback, 10)
         self.psm_cp_subscriber = self.create_subscription(PoseStamped, '/PSM1/local/measured_cp', self.psm_cp_callback, 10)
+        self.gripper_subscriber = self.create_subscription(JointState, "/PSM1/jaw/measured_js", self.gripper_callback, 10)
 
         # Timer for continuous visualization (10 Hz)
         self.marker_timer = self.create_timer(1 / 10, self.publish_wire_marker)
 
         # Initialize button and wire state 
         self.last_button_c = False
+        self.gripper_closed = False
         self.wire_points = []
 
         # Loop radius (unit: [m])
@@ -42,12 +45,12 @@ class HotWire(Node):
         self.measure_wirepoints_mode = False
         # predefined wirepoints 
         self.given_wirepoints = [
-            [-0.0534578483292807, 0.05816829767901543, -0.20802146910044655],
-            [-0.06313192819196786, 0.0619804325616783, -0.16483870257011746],
-            [-0.021225694469145514, 0.05844873871177197, -0.16294280412535622],
-            [-0.019137447460154045, 0.11456474636871886, -0.1646281641730716],
-            [0.035728247861418164, 0.11485032913743043, -0.16753125541660052],
-            [0.03572184801536894, 0.11800767858948905, -0.1942849918260655]
+            [-0.05, 0.05, -0.2],
+            [-0.05, 0.05, -0.16],
+            [-0.02, 0.05, -0.16],
+            [-0.02, 0.1, -0.16],
+            [0.03, 0.1, -0.16],
+            [0.03, 0.1, -0.2],
         ]
 
         # Haptic stiffness and damping
@@ -67,6 +70,17 @@ class HotWire(Node):
         
     def psm_cp_callback(self, msg: PoseStamped):
         self.current_psm_cp = [msg.pose.position.x, msg.pose.position.y, msg.pose.position.z]
+
+
+    def gripper_callback(self, msg: JointState):
+        # Read gripper jaw position 
+        jaw_pos = msg.position
+        if jaw_pos[0] < 0.5:
+            # gripper closed -> hide loop by setting radius to zero
+            self.gripper_closed = True
+        else:
+            # gripper open -> set loop radius
+            self.gripper_closed = False
 
 
     def state_callback(self, msg: HaplyState):
@@ -129,7 +143,7 @@ class HotWire(Node):
                 closest_distance = segment_distance
                 closest_force_vector = force_vector
 
-        if closest_force_vector is None:
+        if closest_force_vector is None or self.gripper_closed == False:
             return [0.0, 0.0, 0.0]
 
         return [
