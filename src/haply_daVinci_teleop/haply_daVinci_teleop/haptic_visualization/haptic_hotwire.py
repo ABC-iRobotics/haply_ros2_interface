@@ -7,6 +7,7 @@ from visualization_msgs.msg import Marker
 from geometry_msgs.msg import PoseStamped, Vector3, Point
 from haply_msgs.msg import HaplyState, HaplyControl
 from sensor_msgs.msg import JointState
+from std_msgs.msg import Bool
 
 
 class HotWire(Node):
@@ -17,16 +18,21 @@ class HotWire(Node):
 
         # Publisher
         self.marker_publisher = self.create_publisher(Marker, "hotwire_marker", 10)
-        self.force_publisher = self.create_publisher(HaplyControl, 'haply_target', 10)
+        self.force_publisher = self.create_publisher(HaplyControl, "haply_target", 10)
+        self.contact_publisher = self.create_publisher(Bool, "contact_status", 10)
 
         # Subscriber
-        self.state_subscriber = self.create_subscription(HaplyState,'haply_state', self.state_callback, 10)
-        self.loop_subscription = self.create_subscription(PoseStamped,'loop_center', self.loop_center_callback, 10)
-        self.psm_cp_subscriber = self.create_subscription(PoseStamped, '/PSM1/local/measured_cp', self.psm_cp_callback, 10)
+        self.state_subscriber = self.create_subscription(HaplyState,"haply_state", self.state_callback, 10)
+        self.loop_subscription = self.create_subscription(PoseStamped,"loop_center", self.loop_center_callback, 10)
+        self.psm_cp_subscriber = self.create_subscription(PoseStamped, "/PSM1/local/measured_cp", self.psm_cp_callback, 10)
         self.gripper_subscriber = self.create_subscription(JointState, "/PSM1/jaw/measured_js", self.gripper_callback, 10)
 
         # Timer for continuous visualization (10 Hz)
         self.marker_timer = self.create_timer(1 / 10, self.publish_wire_marker)
+        self.contact_timer = self.create_timer(1 / 1000, self.publish_contact_status)  # alle 1 Sekunde
+
+        # Initalize contact status for contact detection publishing
+        self.contact_status = False
 
         # Initialize button and wire state 
         self.last_button_c = False
@@ -68,10 +74,24 @@ class HotWire(Node):
         
         
     def psm_cp_callback(self, msg: PoseStamped):
+        """ Store current PSM1 cartesian position """
         self.current_psm_cp = [msg.pose.position.x, msg.pose.position.y, msg.pose.position.z]
 
 
+    def publish_contact_status(self):
+        """ Publish contact status as Bool message """
+        msg = Bool()
+        
+        if self.contact_status == True:
+            msg.data = True
+        else:
+            msg.data = False
+        self.contact_publisher.publish(msg)
+        self.get_logger().info(f'Contact Status: {msg.data}')
+
+
     def gripper_callback(self, msg: JointState):
+        """ Receive gripper jaw position to determine open/closed state """
         # Read gripper jaw position 
         jaw_pos = msg.position
         if jaw_pos[0] < 0.5:
@@ -129,6 +149,7 @@ class HotWire(Node):
         closest_force_vector = None
         closest_distance = 999
 
+        # calculate iteratively the closest distance between loop center and wire as well as the appropriate force vector
         for idx in range(len(self.wire_points)):
             if idx == len(self.wire_points)-1:
                 break
@@ -136,14 +157,24 @@ class HotWire(Node):
                 wire_start_point = self.wire_points[idx]
                 wire_end_point = self.wire_points[idx+1]
 
+            # compute force and distance on each segment
             force_vector, segment_distance = self.compute_force_on_segment(loop_center_position, wire_start_point, wire_end_point)
 
+            # find the overall closest segment and its force vector
             if segment_distance < closest_distance:
                 closest_distance = segment_distance
                 closest_force_vector = force_vector
 
         if closest_force_vector is None or self.gripper_closed == False:
             return [0.0, 0.0, 0.0]
+        
+        # set contact status based on closest distance and deadzone limits
+        if closest_distance < self.outer_limit_deadzone:
+            # inside contact zone
+            self.contact_status = False
+        else:
+            # outside contact zone
+            self.contact_status = True
 
         return [
             float(closest_force_vector[0]),
@@ -153,10 +184,12 @@ class HotWire(Node):
 
 
     def compute_force_on_segment(self, loop_center_position, wire_start_point, wire_end_point):
-
+        """ Be aware that this function is inside a loop over all segments! """
+        """ Computes force vector and distance from loop center to a wire segment defined by start and end point """
         wire_segment_vector = [wire_end_point[i] - wire_start_point[i] for i in range(3)]
         wire_segment_length = math.sqrt(sum(v*v for v in wire_segment_vector))
 
+        # make sure that segment length is not zero
         if wire_segment_length < 1e-6:
             return [0.0, 0.0, 0.0], 999.0
 
@@ -179,6 +212,7 @@ class HotWire(Node):
 
         normalized_dir = [vector_wire_to_loop[i] / distance_center_to_wire for i in range(3)]
 
+        # compute force based on mode
         if self.force_feedback_mode == 0:
             force_vector = [0.0, 0.0, 0.0]
         elif self.force_feedback_mode == 1:
@@ -207,8 +241,6 @@ class HotWire(Node):
     def publish_wire_marker(self):
         if len(self.wire_points) < 2:
             return
-        
-        is_closed_polygon = len(self.wire_points) >= 4
 
         for idx in range(len(self.wire_points)):
             if idx == len(self.wire_points)-1:
