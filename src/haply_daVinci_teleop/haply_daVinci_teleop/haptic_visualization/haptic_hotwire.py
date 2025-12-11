@@ -3,7 +3,6 @@
 import rclpy
 from rclpy.node import Node
 import math
-import numpy as np
 from visualization_msgs.msg import Marker
 from geometry_msgs.msg import PoseStamped, Vector3, Point
 from haply_msgs.msg import HaplyState, HaplyControl
@@ -52,7 +51,6 @@ class HotWire(Node):
             [0.03, 0.1, -0.16],
             [0.03, 0.1, -0.2],
         ]
-        self.hot_wire_segments = []
 
         # Haptic stiffness and damping
         # tested working combinations: 80.0/2.0, 160/3.0
@@ -209,12 +207,15 @@ class HotWire(Node):
     def publish_wire_marker(self):
         if len(self.wire_points) < 2:
             return
+        
+        is_closed_polygon = len(self.wire_points) >= 4
 
-        self.hot_wire_segments.clear()
-
-        for idx in range(len(self.wire_points) - 1):
-            point_start = self.wire_points[idx]
-            point_end   = self.wire_points[idx + 1]
+        for idx in range(len(self.wire_points)):
+            if idx == len(self.wire_points)-1:
+                break
+            else:
+                point_start = self.wire_points[idx]
+                point_end   = self.wire_points[idx+1]
 
             start_x, start_y, start_z = point_start
             end_x,   end_y,   end_z   = point_end
@@ -266,14 +267,6 @@ class HotWire(Node):
             marker.color.a = 1.0
 
             self.marker_publisher.publish(marker)
-
-            self.hot_wire_segments.append({
-                "start": np.array(point_start),
-                "end": np.array(point_end),
-                "midpoint": np.array(midpoint),
-                "length": segment_length,
-                "direction": np.array(direction_unit)
-            })
 
 
     def quat_from_two_vectors(self, vector_from, vector_to):
