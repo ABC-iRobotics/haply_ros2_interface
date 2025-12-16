@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-
+import argparse
 import rclpy
 from rclpy.node import Node
 import math
@@ -33,19 +33,23 @@ class HotWire(Node):
 
         # Initalize contact status for contact detection publishing
         self.contact_status = False
+        self.contact_counter = 0
+        self.contact_counter_hot = False
 
         # Initialize button and wire state 
         self.last_button_c = False
         self.gripper_closed = False
         self.wire_points = []
-
-        # Loop radius (unit: [m])
-        self.loop_radius = 0.0 #0.011  
+ 
         # Distance from Haply tip to PSM1 base (unit: [m])
         self.distance_tip_to_PSM1_base = 0.01
 
         # choose mode (0 = off, 1 = linear, 2 = linear step)
-        self.force_feedback_mode = 1
+        parser = argparse.ArgumentParser()
+        parser.add_argument("--mode", type=int, choices=[0, 1, 2], required=True, help="0 = no ff, 1 = ff mode1, 2 = ff mode2")
+        args = parser.parse_args()
+        self.force_feedback_mode = args.mode
+        #self.force_feedback_mode = 1
         # choose wirepoints source
         self.measure_wirepoints_mode = False
         # predefined wirepoints 
@@ -59,16 +63,14 @@ class HotWire(Node):
         ]
 
         # Haptic stiffness and damping
-        # tested working combinations: 80.0/2.0, 160/3.0
-        self.stiffness = 160.0
-        self.damping = 3.0
+        self.stiffness = 80.0
+        self.damping = 2.0
 
         # Attraction zone (distance wire-to-loop center, unit: [m])
         self.inner_limit_deadzone = 0.001  
-        self.outer_limit_deadzone = 0.012  
+        self.outer_limit_deadzone = 0.01  
         self.midzone = (self.inner_limit_deadzone + self.outer_limit_deadzone) / 2.0
 
-        self.use_force_feedback = True
         self.current_psm_cp = None
         self.get_logger().info(f"Hot Wire Visualization started. Waiting for measuring points...")
         
@@ -84,10 +86,15 @@ class HotWire(Node):
         
         if self.contact_status == True:
             msg.data = True
+            if self.contact_counter_hot == True:
+                self.contact_counter += 1
+                self.contact_counter_hot = False
         else:
+            self.contact_counter_hot = True
             msg.data = False
         self.contact_publisher.publish(msg)
-        self.get_logger().info(f'Contact Status: {msg.data}')
+        #self.get_logger().info(f'Contact Status: {msg.data}')
+        self.get_logger().info(f'Number Contacts: {self.contact_counter}')
 
 
     def gripper_callback(self, msg: JointState):
@@ -204,7 +211,7 @@ class HotWire(Node):
         distance_center_to_wire = math.sqrt(sum(v*v for v in vector_wire_to_loop))
 
         # subtract loop radius
-        effective_distance = distance_center_to_wire + self.loop_radius
+        effective_distance = distance_center_to_wire 
         #self.get_logger().info(f"effective distance: {effective_distance:.4f} m")
 
         if effective_distance < self.inner_limit_deadzone or effective_distance > self.outer_limit_deadzone:
@@ -293,10 +300,17 @@ class HotWire(Node):
             marker.scale.y = 0.002
             marker.scale.z = segment_length
 
-            marker.color.r = 1.0
-            marker.color.g = 0.0
-            marker.color.b = 0.0
-            marker.color.a = 1.0
+            # mark wire segment color based on contact status
+            if self.contact_status == True:
+                marker.color.r = 1.0
+                marker.color.g = 0.0
+                marker.color.b = 0.0
+                marker.color.a = 1.0
+            else:
+                marker.color.r = 0.0
+                marker.color.g = 1.0
+                marker.color.b = 0.0
+                marker.color.a = 1.0
 
             self.marker_publisher.publish(marker)
 

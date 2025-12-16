@@ -108,7 +108,7 @@ This ROS2 node visualizes a loop attached to the PSM1 gripper using a single Mar
 - Updates visualization in real-time at high frequency (1 kHz timer).
 
 #### Publishers
-- `visualization_marker` (`Marker`): Visualizes the loop in RViz.
+- `loop_marker` (`Marker`): Visualizes the loop in RViz.
 - `loop_center` (`PoseStamped`): Publishes the center position and orientation of the loop.
 
 #### Usage

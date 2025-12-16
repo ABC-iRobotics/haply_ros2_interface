@@ -18,7 +18,7 @@ class HapticLoop(Node):
         super().__init__("greifer_loop_cylinders")
 
         # Publisher for marker and loop center
-        self.marker_pub = self.create_publisher(Marker, "visualization_marker", 10)
+        self.marker_pub = self.create_publisher(Marker, "loop_marker", 10)
         self.loop_center_pub = self.create_publisher(PoseStamped, "loop_center", 10)
 
         # Subscriber for PSM1 pose
@@ -26,7 +26,7 @@ class HapticLoop(Node):
         self.create_subscription(JointState, "/PSM1/jaw/measured_js", self.gripper_callback, 10)
 
         # Parameter Loop
-        self.loop_radius = 0.011                    # loop radius
+        self.loop_radius = 0.01                     # loop radius
         self.loop_segments = 10                     # number segments to approximate the circle (keep low for performance)
         self.loop_thickness = 0.002                 # cylinder diameter 2 mm
         self.loop_x_offset = 0.00                   # offset along gripper X axis
@@ -169,9 +169,9 @@ class HapticLoop(Node):
         marker.type = Marker.LINE_STRIP  
         marker.action = Marker.ADD
         marker.scale.x = self.loop_thickness  
-        marker.color.r = 0.0
-        marker.color.g = 1.0
-        marker.color.b = 0.0
+        marker.color.r = 1.0
+        marker.color.g = 0.0
+        marker.color.b = 1.0
         marker.color.a = 1.0
         marker.lifetime.sec = 0
         marker.lifetime.nanosec = 0
