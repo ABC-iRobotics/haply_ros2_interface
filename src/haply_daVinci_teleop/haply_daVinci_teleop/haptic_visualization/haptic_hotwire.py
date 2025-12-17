@@ -16,6 +16,19 @@ class HotWire(Node):
     def __init__(self):
         super().__init__("hot_wire_visualization")   
 
+        # declare parameter with default
+        self.declare_parameter("mode", 0)
+
+        self.force_feedback_mode = (
+            self.get_parameter("mode")
+            .get_parameter_value()
+            .integer_value
+        )
+
+        if self.force_feedback_mode not in (0, 1, 2):
+            raise ValueError("mode must be 0, 1 or 2")
+
+
         # Publisher
         self.marker_publisher = self.create_publisher(Marker, "hotwire_marker", 10)
         self.force_publisher = self.create_publisher(HaplyControl, "haply_target", 10)
@@ -44,11 +57,6 @@ class HotWire(Node):
         # Distance from Haply tip to PSM1 base (unit: [m])
         self.distance_tip_to_PSM1_base = 0.01
 
-        # choose mode (0 = off, 1 = linear, 2 = linear step)
-        parser = argparse.ArgumentParser()
-        parser.add_argument("--mode", type=int, choices=[0, 1, 2], required=True, help="0 = no ff, 1 = ff mode1, 2 = ff mode2")
-        args = parser.parse_args()
-        self.force_feedback_mode = args.mode
         #self.force_feedback_mode = 1
         # choose wirepoints source
         self.measure_wirepoints_mode = False
@@ -94,7 +102,7 @@ class HotWire(Node):
             msg.data = False
         self.contact_publisher.publish(msg)
         #self.get_logger().info(f'Contact Status: {msg.data}')
-        self.get_logger().info(f'Number Contacts: {self.contact_counter}')
+        #self.get_logger().info(f'Number Contacts: {self.contact_counter}')
 
 
     def gripper_callback(self, msg: JointState):

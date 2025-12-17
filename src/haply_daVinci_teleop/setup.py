@@ -1,4 +1,6 @@
 from setuptools import find_packages, setup
+import os
+from glob import glob
 
 package_name = 'haply_daVinci_teleop'
 
@@ -10,6 +12,8 @@ setup(
         ('share/ament_index/resource_index/packages',
             ['resource/' + package_name]),
         ('share/' + package_name, ['package.xml']),
+        (os.path.join('share', package_name, 'launch'),
+            ['launch/teleop_launch.py']),
     ],
     install_requires=['setuptools'],
     zip_safe=True,
@@ -20,9 +24,9 @@ setup(
     tests_require=['pytest'],
     entry_points={
         'console_scripts': [
-            'haply_bridge_jointcontrol = haply_daVinci_teleop.bridge.haply_daVinci_bridge_node_jointcontrol:main',
-            'haptic_ball_visualization = haply_daVinci_teleop.visualization.haptic_ball:main',      
-            'haptic_loop = haply_daVinci_teleop.visualization.haptic_loop:main',
+            'haply_daVinci_bridge_node_jointcontrol = haply_daVinci_teleop.bridge.haply_daVinci_bridge_node_jointcontrol:main',    
+            'haptic_loop = haply_daVinci_teleop.haptic_visualization.haptic_loop:main',
+            'haptic_hotwire = haply_daVinci_teleop.haptic_visualization.haptic_hotwire:main',
         ],
     },
 )

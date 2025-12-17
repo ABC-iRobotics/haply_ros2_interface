@@ -64,10 +64,10 @@ class HapticLoop(Node):
     def gripper_callback(self, msg: JointState):
         # Read gripper jaw position 
         jaw_pos = msg.position
-        if jaw_pos is not None and len(jaw_pos) > 0:
-            self.get_logger().info(f"Actual gripper state: {jaw_pos[0]}")
-        else:
-            self.get_logger().info("No gripper state available.")
+        #if jaw_pos is not None and len(jaw_pos) > 0:
+            #self.get_logger().info(f"Actual gripper state: {jaw_pos[0]}")
+        #else:
+            #self.get_logger().info("No gripper state available.")
         if jaw_pos[0] < 0.5:
             # gripper closed -> hide loop by setting radius to zero
             self.loop_radius = 0.011
