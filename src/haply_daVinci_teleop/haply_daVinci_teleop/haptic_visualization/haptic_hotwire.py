@@ -40,9 +40,9 @@ class HotWire(Node):
         self.psm_cp_subscriber = self.create_subscription(PoseStamped, "/PSM1/local/measured_cp", self.psm_cp_callback, 10)
         self.gripper_subscriber = self.create_subscription(JointState, "/PSM1/jaw/measured_js", self.gripper_callback, 10)
 
-        # Timer for continuous visualization (10 Hz)
-        self.marker_timer = self.create_timer(1 / 10, self.publish_wire_marker)
-        self.contact_timer = self.create_timer(1 / 1000, self.publish_contact_status)  # alle 1 Sekunde
+        # Timer for continuous visualization (100 Hz)
+        self.marker_timer = self.create_timer(1 / 100, self.publish_wire_marker)
+        self.contact_timer = self.create_timer(1 / 100, self.publish_contact_status)  
 
         # Initalize contact status for contact detection publishing
         self.contact_status = False
