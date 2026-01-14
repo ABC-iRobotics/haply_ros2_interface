@@ -39,6 +39,9 @@ class HotWire(Node):
         self.loop_subscription = self.create_subscription(PoseStamped,"loop_center", self.loop_center_callback, 10)
         self.psm_cp_subscriber = self.create_subscription(PoseStamped, "/PSM1/local/measured_cp", self.psm_cp_callback, 10)
         self.gripper_subscriber = self.create_subscription(JointState, "/PSM1/jaw/measured_js", self.gripper_callback, 10)
+        
+        # Store current loop orientation for angle calculation
+        self.loop_orientation = None
 
         # Timer for continuous visualization (100 Hz)
         self.marker_timer = self.create_timer(1 / 100, self.publish_wire_marker)
@@ -80,6 +83,8 @@ class HotWire(Node):
         self.midzone = (self.inner_limit_deadzone + self.outer_limit_deadzone) / 2.0
 
         self.current_psm_cp = None
+        self.closest_distance = 999
+        self.closest_wire_segment_vector = None
         self.get_logger().info(f"Hot Wire Visualization started. Waiting for measuring points...")
         
         
@@ -90,6 +95,9 @@ class HotWire(Node):
 
     def publish_contact_status(self):
         """ Publish contact status as Bool message """
+        # Calculate contact status based on closest distance and loop angle
+        self.contact_status = self.compute_contact_status(self.closest_distance, self.closest_wire_segment_vector)
+        
         msg = Bool()
         
         if self.contact_status == True:
@@ -101,8 +109,6 @@ class HotWire(Node):
             self.contact_counter_hot = True
             msg.data = False
         self.contact_publisher.publish(msg)
-        #self.get_logger().info(f'Contact Status: {msg.data}')
-        #self.get_logger().info(f'Number Contacts: {self.contact_counter}')
 
 
     def gripper_callback(self, msg: JointState):
@@ -141,6 +147,8 @@ class HotWire(Node):
     def loop_center_callback(self, msg: PoseStamped):
         """ Measure loop position, calculate distance and force and publish. """
         loop_center_position = [msg.pose.position.x, msg.pose.position.y, msg.pose.position.z]
+        # Store loop orientation for angle calculation
+        self.loop_orientation = msg.pose.orientation
         force_vector = self.compute_haptic_force(loop_center_position)
 
         control_msg = HaplyControl()
@@ -162,7 +170,8 @@ class HotWire(Node):
             return [0.0, 0.0, 0.0]
 
         closest_force_vector = None
-        closest_distance = 999
+        self.closest_distance = 999
+        self.closest_wire_segment_vector = None
 
         # calculate iteratively the closest distance between loop center and wire as well as the appropriate force vector
         for idx in range(len(self.wire_points)):
@@ -176,26 +185,83 @@ class HotWire(Node):
             force_vector, segment_distance = self.compute_force_on_segment(loop_center_position, wire_start_point, wire_end_point)
 
             # find the overall closest segment and its force vector
-            if segment_distance < closest_distance:
-                closest_distance = segment_distance
+            if segment_distance < self.closest_distance:
+                self.closest_distance = segment_distance
                 closest_force_vector = force_vector
+                self.closest_wire_segment_vector = [wire_end_point[i] - wire_start_point[i] for i in range(3)]
 
         if closest_force_vector is None or self.gripper_closed == False:
             return [0.0, 0.0, 0.0]
-        
-        # set contact status based on closest distance and deadzone limits
-        if closest_distance < self.outer_limit_deadzone:
-            # inside contact zone
-            self.contact_status = False
-        else:
-            # outside contact zone
-            self.contact_status = True
 
         return [
             float(closest_force_vector[0]),
             float(closest_force_vector[1]),
             float(closest_force_vector[2])
         ]
+    
+
+    def compute_contact_status(self, distance, wire_segment_vector):
+        """ 
+        Compute contact status based on distance and loop angle.
+        Returns True if ring is outside deadzone OR loop angle is over 80° to wire normal.
+        Returns False ONLY if ring is inside deadzone AND loop angle is within 80°.
+        """
+        # Check distance criterion: too far if distance exceeds the contact zone
+        is_outside_deadzone = distance > self.outer_limit_deadzone or distance < self.inner_limit_deadzone
+        
+        # Check angle criterion
+        if self.loop_orientation is None or wire_segment_vector is None:
+            # If no orientation data available, only use distance
+            return is_outside_deadzone
+        
+        # Get loop's z-axis orientation (normal to the loop plane)
+        loop_normal = self.quat_to_normal_vector(self.loop_orientation)
+        
+        # Normalize wire segment vector
+        wire_length = math.sqrt(sum(v*v for v in wire_segment_vector))
+        if wire_length < 1e-6:
+            return is_outside_deadzone
+        
+        wire_unit_direction = [v / wire_length for v in wire_segment_vector]
+        
+        # Calculate angle between loop normal and wire direction
+        alignment_similarity = sum(loop_normal[i] * wire_unit_direction[i] for i in range(3))
+        # Clamp to [-1, 1] to avoid numerical errors in acos
+        alignment_similarity = max(-1.0, min(1.0, alignment_similarity))
+        angle_rad = math.acos(abs(alignment_similarity))  # Use abs to consider parallel orientation
+        angle_deg = math.degrees(angle_rad)
+        
+        # Angle tolerance: loop should be within ~80° to the wire normal
+        angle_tolerance = 80.0  # degrees
+        angle_exceeds_tolerance = angle_deg > angle_tolerance
+        
+        # Return True if distance is outside deadzone OR angle exceeds tolerance
+        # Return False ONLY if distance is inside deadzone AND angle is within tolerance
+        contact = is_outside_deadzone or angle_exceeds_tolerance
+        
+        return contact
+    
+
+    def quat_to_normal_vector(self, quat):
+        """
+        Convert quaternion to normal vector (z-axis of the rotated frame).
+        This represents the orientation of the loop plane.
+        """
+        x, y, z, w = quat.x, quat.y, quat.z, quat.w
+        
+        # Transform the z-axis unit vector (0, 0, 1) using the quaternion
+        # Formula: v' = q * v * q^-1
+        # For z-axis: (0, 0, 1)
+        normal_x = 2 * (x * z + w * y)
+        normal_y = 2 * (y * z - w * x)
+        normal_z = 1 - 2 * (x * x + y * y)
+        
+        # Normalize
+        norm = math.sqrt(normal_x**2 + normal_y**2 + normal_z**2)
+        if norm < 1e-6:
+            return [0.0, 0.0, 1.0]
+        
+        return [normal_x / norm, normal_y / norm, normal_z / norm]
 
 
     def compute_force_on_segment(self, loop_center_position, wire_start_point, wire_end_point):
