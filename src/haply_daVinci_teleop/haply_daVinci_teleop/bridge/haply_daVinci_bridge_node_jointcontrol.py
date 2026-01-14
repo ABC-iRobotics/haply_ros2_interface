@@ -1,4 +1,5 @@
 #!/usr/bin/env python3
+import time
 import rclpy
 import numpy as np
 from rclpy.node import Node
@@ -20,7 +21,8 @@ class JawOps:
         self._ral = arm_ral.create_child("jaw")
         u = crtk.utils(self, self._ral, connection_timeout)
         u.add_measured_js()   
-        u.add_servo_jp()      
+        u.add_servo_jp()    
+        u.add_move_jp()
 
 # class for using CRTK arm operations
 class ArmOps:
@@ -31,6 +33,7 @@ class ArmOps:
         u.add_setpoint_cp()
         u.add_servo_cp()
         u.add_servo_jp()
+        u.add_move_jp()
 
         self.jaw = JawOps(self._ral, connection_timeout)
 
@@ -58,7 +61,7 @@ class HaplyToDaVinciBridge(Node):
         self.create_subscription(JointState, '/PSM1/measured_js',
                                  self.daVinci_measured_js_callback, 10)
         self.create_subscription(HaplyState, "haply_state",
-                                 self.haply_state_callback, 10)
+                                self.haply_state_callback, 10)
 
         self.scale_arm_movement = 0.25
         self.rot_scale = 1.0
@@ -83,6 +86,10 @@ class HaplyToDaVinciBridge(Node):
         # calibration variables for haply
         self.calibrated_haply_position = None
         self.calibrated_haply_orientation = None
+
+        # flag for simulation mode
+        self.simulation_mode = True
+        self.initial_position_sent = False
 
         self.get_logger().info("haply_to_daVinci_bridge_node started")
 
@@ -111,7 +118,7 @@ class HaplyToDaVinciBridge(Node):
             self.calibrated_haply_orientation
         )
         # Set new daVinci joint targets based on pose difference and publish
-        self.send_target_daVinci_joints(dx, dy, dz, droll, dpitch, dyaw)
+        self.set_target_daVinci_joints(dx, dy, dz, droll, dpitch, dyaw)
         # Control gripper based on button A
         self.control_jaw(msg)
 
@@ -122,10 +129,12 @@ class HaplyToDaVinciBridge(Node):
             current = msg.buttons.a
             if current and not self.last_button_a:
                 if self.gripper_status == 0:
-                    self.arm.jaw.servo_jp(np.array([1.0]))   
+                    #self.arm.jaw.servo_jp(np.array([1.0]))   
+                    self.arm.jaw.move_jp(np.array([1.0])) 
                     self.gripper_status = 1
                 else:
-                    self.arm.jaw.servo_jp(np.array([0.00]))   
+                    #self.arm.jaw.servo_jp(np.array([0.00]))  
+                    self.arm.jaw.move_jp(np.array([0.00]))    
                     self.gripper_status = 0
 
             self.last_button_a = current
@@ -241,7 +250,7 @@ class HaplyToDaVinciBridge(Node):
         return difference_x, difference_y, difference_z, difference_roll, difference_pitch, difference_yaw
 
 
-    def send_target_daVinci_joints(self, dx, dy, dz, droll, dpitch, dyaw):
+    def set_target_daVinci_joints(self, dx, dy, dz, droll, dpitch, dyaw):
         """ Send target daVinci joints based on pose differences. """
         if self.calibrated_daVinci_joints is None:
             self.get_logger().warning("Calibrated daVinci joints are not set.")
@@ -268,10 +277,16 @@ class HaplyToDaVinciBridge(Node):
             )
             return
 
+        self.send_target_daVinci_joints(target_joints)
+
+
+    def send_target_daVinci_joints(self, target_joints):
+        """ Send the target joint positions to the daVinci arm via CRTK. """
         try:
-            self.arm.servo_jp(target_joints)
+            #self.arm.servo_jp(target_joints)
+            self.arm.move_jp(target_joints) # use move_jp for smoother motion
         except Exception as e:
-            self.get_logger().error(f"Error sending servo_jp: {e}")
+            self.get_logger().error(f"Error sending pose: {e}")
 
 
 def main(args=None):
