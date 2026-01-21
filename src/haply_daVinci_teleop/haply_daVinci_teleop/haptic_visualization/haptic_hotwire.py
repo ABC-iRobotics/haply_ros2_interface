@@ -153,6 +153,12 @@ class HotWire(Node):
     def loop_center_callback(self, msg: PoseStamped):
         """ Measure loop position, calculate distance and force and publish. """
         loop_center_position = [msg.pose.position.x, msg.pose.position.y, msg.pose.position.z]
+        self.current_loop_center = [
+            msg.pose.position.x,
+            msg.pose.position.y,
+            msg.pose.position.z
+        ]
+
         # Store loop orientation for angle calculation
         self.loop_orientation = msg.pose.orientation
         force_vector = self.compute_haptic_force(loop_center_position)
@@ -205,9 +211,61 @@ class HotWire(Node):
             float(closest_force_vector[2])
         ]
     
+    # --------------TEST-----------------------------------------------------------
+    def segment_intersects_loop(self, P0, P1, C, n, R, tol=5e-4):
+        """
+        Check if wire segment P0->P1 intersects the hollow loop ring.
+        Contact only if intersection point lies on the ring (≈ radius R).
+        """
 
-    def compute_contact_status(self, distance, wire_segment_vector):
-        """ Compute contact status based on distance and angle between loop normal and wire segment """
+        # Segment direction
+        d = [P1[i] - P0[i] for i in range(3)]
+
+        denom = sum(n[i] * d[i] for i in range(3))
+        if abs(denom) < 1e-6:
+            # Segment parallel to loop plane
+            return False
+
+        t = sum(n[i] * (C[i] - P0[i]) for i in range(3)) / denom
+
+        if t < 0.0 or t > 1.0:
+            # Intersection not on segment
+            return False
+
+        # Intersection point
+        X = [P0[i] + t * d[i] for i in range(3)]
+
+        # Radial distance from loop center
+        r = math.sqrt(sum((X[i] - C[i])**2 for i in range(3)))
+
+        # Contact ONLY near the ring radius
+        return abs(r - R) <= tol
+
+    
+    def compute_contact_status(self, _, __):
+        if self.loop_orientation is None or self.current_loop_center is None:
+            return False
+
+        # Loop geometry
+        C = self.current_loop_center
+        n = self.quat_to_normal_vector(self.loop_orientation)
+        R = self.loop_radius
+
+        # Check all wire segments
+        for i in range(len(self.wire_points) - 1):
+            P0 = self.wire_points[i]
+            P1 = self.wire_points[i + 1]
+
+            if self.segment_intersects_loop(P0, P1, C, n, R):
+                return True
+
+        return False
+
+
+
+    """
+    def compute_contact_status(self, closest_distance_to_wire, wire_segment_vector):
+        
         if self.loop_orientation is None or wire_segment_vector is None:
             return False
 
@@ -231,10 +289,11 @@ class HotWire(Node):
         # Optional contact tolerance
         contact_tolerance = 0
 
-        # Contact detection
-        contact = distance <= (effective_loop_radius + contact_tolerance)
-        return contact
-    
+        if closest_distance_to_wire <= (effective_loop_radius + contact_tolerance):
+            return True
+        else:
+            return False
+    """
 
     """
     def compute_contact_status(self, distance, wire_segment_vector):
