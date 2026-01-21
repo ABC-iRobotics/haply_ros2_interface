@@ -7,15 +7,15 @@ from std_msgs.msg import String
 from visualization_msgs.msg import Marker
 import math
 
-class AutoTrialController(Node):
+class StudyStateController(Node):
     def __init__(self):
-        super().__init__("auto_trial_controller")
+        super().__init__("study_state_controller")
 
         # Parameters
         self.start_point = [-0.05, 0.05, -0.2]
         self.end_point = [0.03, 0.1, -0.2]
-        self.reset_point = [0.0, 0.05, -0.1]
-        self.tolerance = 0.002  # 2 mm box
+        self.reset_point = [0.0, 0.1, -0.12]
+        self.tolerance = 0.004  # 4 mm sphere radius
 
         # Default State
         self.trial_state = "IDLE"
@@ -134,7 +134,7 @@ class AutoTrialController(Node):
 
 def main(args=None):
     rclpy.init(args=args)
-    node = AutoTrialController()
+    node = StudyStateController()
     try:
         rclpy.spin(node)
     except KeyboardInterrupt:

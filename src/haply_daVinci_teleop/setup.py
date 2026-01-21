@@ -27,6 +27,7 @@ setup(
             'haply_daVinci_bridge_node_jointcontrol = haply_daVinci_teleop.bridge.haply_daVinci_bridge_node_jointcontrol:main',    
             'haptic_loop = haply_daVinci_teleop.haptic_visualization.haptic_loop:main',
             'haptic_hotwire = haply_daVinci_teleop.haptic_visualization.haptic_hotwire:main',
+            'study_controller = haply_daVinci_teleop.data_evaluation.study_controller:main',
         ],
     },
 )

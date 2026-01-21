@@ -36,9 +36,17 @@ def generate_launch_description():
         output='screen'
     )
 
+    study_controller_node = Node(
+        package='haply_daVinci_teleop',
+        executable='study_controller',
+        name='study_controller',
+        output='screen'
+    )
+
     return LaunchDescription([
         mode_arg,
         hotwire_node,
         bridge_node,
         haptic_loop_node,
+        study_controller_node,
     ])
