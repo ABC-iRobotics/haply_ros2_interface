@@ -2,6 +2,7 @@
 import rclpy
 from rclpy.node import Node
 from rclpy.duration import Duration
+from rclpy.qos import QoSProfile, ReliabilityPolicy, DurabilityPolicy
 import math
 import tf2_ros
 import tf2_geometry_msgs
@@ -18,7 +19,9 @@ class HapticLoop(Node):
         super().__init__("greifer_loop_cylinders")
 
         # Publisher for marker and loop center
-        self.marker_pub = self.create_publisher(Marker, "loop_marker", 10)
+        #self.marker_pub = self.create_publisher(Marker, "loop_marker", 10)
+        marker_qos = QoSProfile(depth=1, reliability=ReliabilityPolicy.RELIABLE, durability=DurabilityPolicy.TRANSIENT_LOCAL)
+        self.marker_pub = self.create_publisher(Marker, "loop_marker", marker_qos)
         self.loop_center_pub = self.create_publisher(PoseStamped, "loop_center", 10)
 
         # Subscriber for PSM1 pose
