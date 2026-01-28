@@ -49,6 +49,8 @@ class HaplyToDaVinciBridge(Node):
         self.arm = ArmOps(self.ral, "PSM1")
 
         try:
+            self.arm.disable(5.0)
+            time.sleep(10.0)
             self.arm.enable(5.0)
             self.arm.home(5.0)
             self.get_logger().info("Arm enabled and homed")
