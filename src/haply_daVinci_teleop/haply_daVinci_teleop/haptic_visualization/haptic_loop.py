@@ -59,7 +59,7 @@ class HapticLoop(Node):
         self.static_broadcaster.sendTransform(static_transform)
 
         # Timer for continuous visualization
-        self.timer = self.create_timer(1/1000, self.publish_loop_marker)
+        self.timer = self.create_timer(1/100, self.publish_loop_marker)
 
         self.get_logger().info("Haptic Loop Visualization initialized.")
 
