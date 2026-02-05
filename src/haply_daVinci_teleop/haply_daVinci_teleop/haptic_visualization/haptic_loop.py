@@ -2,11 +2,9 @@
 import rclpy
 from rclpy.node import Node
 from rclpy.duration import Duration
-from rclpy.qos import QoSProfile, ReliabilityPolicy, DurabilityPolicy
 import math
 import tf2_ros
 import tf2_geometry_msgs
-import crtk
 from visualization_msgs.msg import Marker
 from geometry_msgs.msg import Point, PoseStamped, TransformStamped
 from sensor_msgs.msg import JointState
@@ -19,9 +17,7 @@ class HapticLoop(Node):
         super().__init__("greifer_loop_cylinders")
 
         # Publisher for marker and loop center
-        #self.marker_pub = self.create_publisher(Marker, "loop_marker", 10)
-        marker_qos = QoSProfile(depth=1, reliability=ReliabilityPolicy.RELIABLE, durability=DurabilityPolicy.TRANSIENT_LOCAL)
-        self.marker_pub = self.create_publisher(Marker, "loop_marker", marker_qos)
+        self.marker_pub = self.create_publisher(Marker, "loop_marker", 10)
         self.loop_center_pub = self.create_publisher(PoseStamped, "loop_center", 10)
 
         # Subscriber for PSM1 pose
@@ -60,6 +56,7 @@ class HapticLoop(Node):
 
         # Timer for continuous visualization
         self.timer = self.create_timer(1/100, self.publish_loop_marker)
+        self.static_timer = self.create_timer(0.1, lambda: self.static_broadcaster.sendTransform(static_transform))
 
         self.get_logger().info("Haptic Loop Visualization initialized.")
 
@@ -67,10 +64,10 @@ class HapticLoop(Node):
     def gripper_callback(self, msg: JointState):
         # Read gripper jaw position 
         jaw_pos = msg.position
-        #if jaw_pos is not None and len(jaw_pos) > 0:
-            #self.get_logger().info(f"Actual gripper state: {jaw_pos[0]}")
-        #else:
-            #self.get_logger().info("No gripper state available.")
+        if len(jaw_pos) == 0:
+            #self.get_logger().warning("Please stay in configuration pose!")
+            return
+        
         if jaw_pos[0] < 0.5:
             # gripper closed -> hide loop by setting radius to zero
             self.loop_radius = 0.011

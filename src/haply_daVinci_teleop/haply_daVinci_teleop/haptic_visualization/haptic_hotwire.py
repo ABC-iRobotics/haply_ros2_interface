@@ -1,5 +1,4 @@
 #!/usr/bin/env python3
-import argparse
 import rclpy
 from rclpy.node import Node
 import math
@@ -80,7 +79,7 @@ class HotWire(Node):
 
         # Attraction zone (distance wire-to-loop center, unit: [m])
         self.inner_limit_deadzone = 0.001  
-        self.outer_limit_deadzone = 0.01  
+        self.outer_limit_deadzone = self.loop_radius + 0.005
         self.midzone = (self.inner_limit_deadzone + self.outer_limit_deadzone) / 2.0
 
         self.current_psm_cp = None
@@ -98,7 +97,7 @@ class HotWire(Node):
         """ Store current PSM1 cartesian position """
         self.current_psm_cp = [msg.pose.position.x, msg.pose.position.y, msg.pose.position.z]
 
-
+    # -------------------------------------------------------------------------
     def publish_contact_status(self):
         """ Publish contact status as Bool message """
         # Calculate contact status based on closest distance and loop angle
@@ -116,7 +115,7 @@ class HotWire(Node):
             msg.data = False
         self.contact_publisher.publish(msg)
 
-
+    # -------------------------------------------------------------------------
     def gripper_callback(self, msg: JointState):
         """ Receive gripper jaw position to determine open/closed state """
         # Read gripper jaw position 
@@ -128,7 +127,7 @@ class HotWire(Node):
             # gripper open -> set loop radius
             self.gripper_closed = False
 
-
+    # -------------------------------------------------------------------------
     def state_callback(self, msg: HaplyState):
         """ Receive Haply State """
         current_button_state = msg.buttons.c
@@ -140,16 +139,11 @@ class HotWire(Node):
                 self.wire_points.append(self.current_psm_cp.copy())
                 self.get_logger().info(f"Added point {len(self.wire_points)} / {self.current_psm_cp}")
 
-        """elif self.measure_wirepoints_mode == False:
-            if len(self.wire_points) == 0:
-                self.wire_points = self.given_wirepoints.copy()
-                self.get_logger().info("Loaded predefined wire points.")"""
-
         self.last_button_c = current_button_state
         self.velocity = [msg.velocity.x, msg.velocity.y, -msg.velocity.z]
         #self.get_logger().info(f"velocity: x={self.velocity[0]:.3f}, y={self.velocity[1]:.3f}, z={self.velocity[2]:.3f}")
 
-
+    # -------------------------------------------------------------------------
     def loop_center_callback(self, msg: PoseStamped):
         """ Measure loop position, calculate distance and force and publish. """
         loop_center_position = [msg.pose.position.x, msg.pose.position.y, msg.pose.position.z]
@@ -175,7 +169,7 @@ class HotWire(Node):
         self.force_publisher.publish(control_msg)
         #self.get_logger().info(f"Published Force: x={force_vector[0]:.3f}, y={force_vector[1]:.3f}, z={force_vector[2]:.3f}")
 
-
+    #  -------------------------------------------------------------------------
     def compute_haptic_force(self, loop_center_position):
         """ Compute haptic force using the distance from loopcenter to wire and velocity of haply """
         if len(self.wire_points) < 2:
@@ -211,12 +205,9 @@ class HotWire(Node):
             float(closest_force_vector[2])
         ]
     
-    # --------------TEST-----------------------------------------------------------
+    # -------------------------------------------------------------------------
     def segment_intersects_loop(self, P0, P1, C, n, R, tol=5e-4):
-        """
-        Check if wire segment P0->P1 intersects the hollow loop ring.
-        Contact only if intersection point lies on the ring (≈ radius R).
-        """
+        """Check if wire segment P0->P1 intersects the hollow loop ring. Contact only if intersection point lies on the ring (≈ radius R)."""
 
         # Segment direction
         d = [P1[i] - P0[i] for i in range(3)]
@@ -241,7 +232,7 @@ class HotWire(Node):
         # Contact ONLY near the ring radius
         return abs(r - R) <= tol
 
-    
+    # -------------------------------------------------------------------------
     def compute_contact_status(self, _, __):
         if self.loop_orientation is None or self.current_loop_center is None:
             return False
@@ -256,81 +247,12 @@ class HotWire(Node):
             P0 = self.wire_points[i]
             P1 = self.wire_points[i + 1]
 
-            if self.segment_intersects_loop(P0, P1, C, n, R):
+            if self.segment_intersects_loop(P0, P1, C, n, R) or self.closest_distance >= self.loop_radius:
+                #self.get_logger().info("Contact detected!")
                 return True
 
         return False
-
-
-
-    """
-    def compute_contact_status(self, closest_distance_to_wire, wire_segment_vector):
-        
-        if self.loop_orientation is None or wire_segment_vector is None:
-            return False
-
-        # Loop normal
-        loop_normal = self.quat_to_normal_vector(self.loop_orientation)
-
-        # Wire direction normalized
-        wire_len = math.sqrt(sum(v*v for v in wire_segment_vector))
-        if wire_len < 1e-6:
-            return False
-        wire_dir = [v / wire_len for v in wire_segment_vector]
-
-        # Angle between loop normal and wire direction
-        cos_theta = abs(sum(loop_normal[i] * wire_dir[i] for i in range(3)))
-        cos_theta = max(-1.0, min(1.0, cos_theta))
-        sin_theta = math.sqrt(1.0 - cos_theta*cos_theta)
-
-        # Effective loop radius based on loop radius and loop angle to wire
-        effective_loop_radius = self.loop_radius * sin_theta
-
-        # Optional contact tolerance
-        contact_tolerance = 0
-
-        if closest_distance_to_wire <= (effective_loop_radius + contact_tolerance):
-            return True
-        else:
-            return False
-    """
-
-    """
-    def compute_contact_status(self, distance, wire_segment_vector):
-        # Check distance criterion: too far if distance exceeds the contact zone
-        in_contact_zone = distance > self.outer_limit_deadzone or distance < self.inner_limit_deadzone
-        
-        # Check angle criterion
-        if self.loop_orientation is None or wire_segment_vector is None:
-            # If no orientation data available, only use distance
-            return in_contact_zone
-        
-        # Get loop's z-axis orientation (normal to the loop plane)
-        loop_normal = self.quat_to_normal_vector(self.loop_orientation)
-        
-        # Normalize wire segment vector
-        wire_length = math.sqrt(sum(v*v for v in wire_segment_vector))
-        if wire_length < 1e-6:
-            return in_contact_zone
-        
-        wire_unit_direction = [v / wire_length for v in wire_segment_vector]
-        
-        # Calculate angle between loop normal and wire direction
-        alignment_similarity = sum(loop_normal[i] * wire_unit_direction[i] for i in range(3))
-        # Clamp to [-1, 1] to avoid numerical errors in acos
-        alignment_similarity = max(-1.0, min(1.0, alignment_similarity))
-        angle_rad = math.acos(abs(alignment_similarity))  
-        angle_deg = math.degrees(angle_rad)
-        
-        # Angle tolerance: loop should be within ~80° to the wire normal
-        angle_tolerance = 80.0  # degrees
-        angle_exceeds_tolerance = angle_deg > angle_tolerance
-        
-        # Return True if distance is outside deadzone OR angle exceeds tolerance
-        contact = in_contact_zone or angle_exceeds_tolerance
-        return contact 
-    """
-    
+    # -------------------------------------------------------------------------
 
     def quat_to_normal_vector(self, quat):
         """ Convert quaternion to normal vector (z-axis of the rotated frame).This represents the orientation of the loop plane."""
@@ -348,7 +270,7 @@ class HotWire(Node):
         
         return [normal_x / norm, normal_y / norm, normal_z / norm]
 
-
+    # -------------------------------------------------------------------------
     def compute_force_on_segment(self, loop_center_position, wire_start_point, wire_end_point):
         """ Be aware that this function is inside a loop over all segments! """
         """ Computes force vector and distance from loop center to a wire segment defined by start and end point """
@@ -403,7 +325,7 @@ class HotWire(Node):
 
         return force_vector, effective_distance
     
-
+    # -------------------------------------------------------------------------
     def publish_wire_marker(self):
         if len(self.wire_points) < 2:
             return
@@ -473,7 +395,7 @@ class HotWire(Node):
 
             self.marker_publisher.publish(marker)
 
-
+    # -------------------------------------------------------------------------
     def quat_from_two_vectors(self, vector_from, vector_to):
         from_x, from_y, from_z = vector_from
         to_x, to_y, to_z = vector_to
