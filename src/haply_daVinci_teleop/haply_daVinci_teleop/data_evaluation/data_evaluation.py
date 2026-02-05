@@ -1,6 +1,7 @@
 #!/usr/bin/env python3
 
 import rosbag2_py
+import csv
 from rclpy.serialization import deserialize_message
 from rosidl_runtime_py.utilities import get_message
 from pathlib import Path
@@ -8,14 +9,18 @@ import matplotlib.pyplot as plt
 import numpy as np
 
 # --------- Configuration ----------
-BAG_PATH = Path.home() / "rosbags" / "Participant0_mode2_round1"
+BAG_PATH = Path.home() / "rosbags" / "Participant0_mode2_round2"
+csv_path = BAG_PATH / "rosbag_output.csv"
 
 TOPICS_OF_INTEREST = {
     "/haply_state": "haply_msgs/msg/HaplyState",
     "/trial/state": "std_msgs/msg/String",
     "/contact_status": "std_msgs/msg/Bool",
     "/PSM1/local/measured_cp": "geometry_msgs/msg/PoseStamped",
+    "/haply_target": "geometry_msgs/msg/PoseStamped",
 }
+
+RUNNING_STATES = {"RUNNING1", "RUNNING2", "RUNNING3", "RUNNING4", "RUNNING5"}
 # ----------------------------------
 
 
@@ -47,6 +52,8 @@ def main():
     x_positions = []
     y_positions = []
     z_positions = []
+    trial_states = []        
+    current_trial_state = None 
 
     trial_running = False
     t0 = None  # Startzeitpunkt der RUNNING-Phase
@@ -63,12 +70,13 @@ def main():
         # -------- Trial State überwachen --------
         if topic == "/trial/state":
             msg = deserialize_message(data, msg_types[topic])
-            trial_running = (msg.data == "RUNNING")
+            trial_running = msg.data in RUNNING_STATES
+            current_trial_state = msg.data if trial_running else None
 
             if trial_running and t0 is None:
                 t0 = timestamp  # Startzeitpunkt der ersten RUNNING-Phase
-
             continue
+
 
         # -------- Kontaktstatus --------
         if topic == "/contact_status":
@@ -96,6 +104,7 @@ def main():
         x_positions.append(msg.pose.position.x)
         y_positions.append(msg.pose.position.y)
         z_positions.append(msg.pose.position.z)
+        trial_states.append(current_trial_state) 
 
     print(f"{len(x_positions)} Datapoints während RUNNING ausgewertet.")
     print(f"Anzahl Kontakte während RUNNING: {contact_count}")
@@ -127,6 +136,17 @@ def main():
     plt.tight_layout()
     plt.show()
 
+    # ---- CSV export ----
+    csv_path = BAG_PATH / "rosbag_output.csv"
+    with open(csv_path, "w", newline="") as csvfile:
+        writer = csv.writer(csvfile)
+        # Header
+        writer.writerow(["time", "x", "y", "z", "contact_count", "trial_state"])
+        # Daten schreiben
+        for t, x, y, z, state in zip(time_stamps, x_positions, y_positions, z_positions, trial_states):
+            writer.writerow([t, x, y, z, contact_count, state])
+
+    print(f"CSV-Datei gespeichert: {csv_path}")
 
 if __name__ == "__main__":
     main()
