@@ -1,7 +1,6 @@
 #!/usr/bin/env python3
 
 import rosbag2_py
-import csv
 from rclpy.serialization import deserialize_message
 from rosidl_runtime_py.utilities import get_message
 from pathlib import Path
@@ -17,16 +16,14 @@ TOPICS_OF_INTEREST = {
     "/trial/state": "std_msgs/msg/String",
     "/contact_status": "std_msgs/msg/Bool",
     "/PSM1/local/measured_cp": "geometry_msgs/msg/PoseStamped",
-    "/haply_target": "geometry_msgs/msg/PoseStamped",
+    "/haply_target": "haply_msgs/msg/HaplyControl",
 }
 
 RUNNING_STATES = {"RUNNING1", "RUNNING2", "RUNNING3", "RUNNING4", "RUNNING5"}
 # ----------------------------------
-
-
 def main():
     if not BAG_PATH.exists():
-        raise FileNotFoundError(f"Rosbag nicht gefunden: {BAG_PATH}")
+        raise FileNotFoundError(f"Rosbag not found: {BAG_PATH}")
 
     storage_options = rosbag2_py.StorageOptions(
         uri=str(BAG_PATH),
@@ -41,7 +38,7 @@ def main():
     reader = rosbag2_py.SequentialReader()
     reader.open(storage_options, converter_options)
 
-    # Message types vorbereiten
+    # prepare message types
     msg_types = {
         topic: get_message(msg_type)
         for topic, msg_type in TOPICS_OF_INTEREST.items()
@@ -52,52 +49,95 @@ def main():
     x_positions = []
     y_positions = []
     z_positions = []
-    trial_states = []        
+    loop_centers = []
+    trial_states = []     
+    # ---- force data container ----
+    force_time_stamps = []
+    fx_values = []
+    fy_values = []
+    fz_values = []
+    # ---- state container ----
+    state_change_times = []
+    state_change_labels = []
+    last_state = None
+    # ---- wire points ----
+    given_wirepoints = [
+        [-0.05, 0.05, -0.2],
+        [-0.05, 0.05, -0.16],
+        [-0.02, 0.05, -0.16],
+        [-0.02, 0.1, -0.16],
+        [0.03, 0.1, -0.16],
+        [0.03, 0.1, -0.2],
+    ]
+   
     current_trial_state = None 
 
     trial_running = False
-    t0 = None  # Startzeitpunkt der RUNNING-Phase
+    t0 = None  # Start of RUNNING phase
 
     # ---- contact counter ----
     last_contact_state = False
     contact_count = 0
 
-    print("Starte Rosbag-Auswertung...\n")
+    print("Start Rosbag evaluation...\n")
 
+    # -------- Iterate through rosbag messages --------
     while reader.has_next():
         topic, data, timestamp = reader.read_next()
 
-        # -------- Trial State überwachen --------
+        # -------- Check Trial States --------
         if topic == "/trial/state":
             msg = deserialize_message(data, msg_types[topic])
+
+            new_state = msg.data
             trial_running = msg.data in RUNNING_STATES
             current_trial_state = msg.data if trial_running else None
 
             if trial_running and t0 is None:
-                t0 = timestamp  # Startzeitpunkt der ersten RUNNING-Phase
+                t0 = timestamp  # Startpoint for time measurement
+            
+            # ---- detect state change ----
+            if t0 is not None and new_state != last_state:
+                t_state = (timestamp - t0) * 1e-9
+                state_change_times.append(t_state)
+                state_change_labels.append(new_state)
+
+            last_state = new_state
             continue
 
 
-        # -------- Kontaktstatus --------
+        # -------- Contact status --------
         if topic == "/contact_status":
             msg = deserialize_message(data, msg_types[topic])
             current_contact = msg.data
 
             if trial_running:
-                # steigende Flanke: 0 -> 1
+                # only count transitions from no contact to contact during RUNNING
                 if not last_contact_state and current_contact:
                     contact_count += 1
 
             last_contact_state = current_contact
             continue
 
-        # -------- Positionsdaten nur während RUNNING --------
+        # -------- Haply forces --------
+        if topic == "/haply_target" and trial_running:
+            msg = deserialize_message(data, msg_types[topic])
+
+            t_force = (timestamp - t0) * 1e-9
+
+            force_time_stamps.append(t_force)
+            fx_values.append(msg.force.x)
+            fy_values.append(msg.force.y)
+            fz_values.append(msg.force.z)
+
+            continue
+
+        # -------- position data --------
         if topic != "/PSM1/local/measured_cp" or not trial_running:
             continue
 
         msg = deserialize_message(data, msg_types[topic])
-
-        # Zeit relativ zum RUNNING-Start
+       
         t_sec = (timestamp - t0) * 1e-9
 
         time_stamps.append(t_sec)
@@ -105,30 +145,65 @@ def main():
         y_positions.append(msg.pose.position.y)
         z_positions.append(msg.pose.position.z)
         trial_states.append(current_trial_state) 
+    # ---- end of rosbag iteration ----
 
-    print(f"{len(x_positions)} Datapoints während RUNNING ausgewertet.")
-    print(f"Anzahl Kontakte während RUNNING: {contact_count}")
+    print(f"Evaluated datapoints during RUNNING state: {len(x_positions)}.")
+    print(f"Number contacts during RUNNING state: {contact_count}")
 
     if len(x_positions) == 0:
-        print("Keine Daten im RUNNING-Zeitraum gefunden.")
+        print("No data points found during RUNNING state.")
         return
 
-    # ---- numpy ----
+    # ---- numpy conversions ----
     time_stamps = np.array(time_stamps)
     x_positions = np.array(x_positions)
     y_positions = np.array(y_positions)
     z_positions = np.array(z_positions)
+    loop_centers = np.array(loop_centers)
 
-    mean_x = np.mean(x_positions)
+    # ---- Positionsabweichungen berechnen ----
+    wirepoints = np.array(given_wirepoints)
+
+    state_to_segment = {
+        "RUNNING1": (0, 1),
+        "RUNNING2": (1, 2),
+        "RUNNING3": (2, 3),
+        "RUNNING4": (3, 4),
+        "RUNNING5": (4, 5),
+    }
+
+    # To calculate by distance between loopcenter and wirepoints!
+    #position_errors[mask] = errors
+
+    # ---- Varianz berechnen ----
+    #position_variance = np.var(position_errors)
+    #print(f"Positionsvarianz relativ zum Wire: {position_variance:.8f} m²")
+
+    force_time_stamps = np.array(force_time_stamps)
+    fx_values = np.array(fx_values)
+    fy_values = np.array(fy_values)
+    fz_values = np.array(fz_values)
+
+    # ---- Calculations ----
+    #mean_x = np.mean(x_positions)
     #print(f"Mittelwert x-Position (RUNNING): {mean_x:.6f} m")
+
+    force_values = np.sqrt(fx_values**2 + fy_values**2 + fz_values**2)
+
     print(f"Benötigte Zeit: {time_stamps[-1] - time_stamps[0]:.2f} s")
 
-    # ---- Plot ----
+    # ---- helper function to add state change markers ----
+    def add_state_markers():
+        for t, label in zip(state_change_times, state_change_labels):
+            plt.axvline(x=t, linestyle=":", linewidth=2, color="r")
+
+    # ---- Plot Position ----
     plt.figure(figsize=(10, 4))
     plt.plot(time_stamps, x_positions, label="x")
     plt.plot(time_stamps, y_positions, label="y")
     plt.plot(time_stamps, z_positions, label="z")
-    plt.xlabel("time since RUNNING start [s]")
+    add_state_markers()
+    plt.xlabel("time since start [s]")
     plt.ylabel("position [m]")
     plt.title("PSM1 position during RUNNING")
     plt.grid(True)
@@ -136,17 +211,36 @@ def main():
     plt.tight_layout()
     plt.show()
 
-    # ---- CSV export ----
-    csv_path = BAG_PATH / "rosbag_output.csv"
-    with open(csv_path, "w", newline="") as csvfile:
-        writer = csv.writer(csvfile)
-        # Header
-        writer.writerow(["time", "x", "y", "z", "contact_count", "trial_state"])
-        # Daten schreiben
-        for t, x, y, z, state in zip(time_stamps, x_positions, y_positions, z_positions, trial_states):
-            writer.writerow([t, x, y, z, contact_count, state])
+    # ---- Plot Forces ----
+    if len(force_time_stamps) > 0:
+        plt.figure(figsize=(10, 4))
+        #plt.plot(force_time_stamps, fx_values, label="Fx")
+        #plt.plot(force_time_stamps, fy_values, label="Fy")
+        #plt.plot(force_time_stamps, fz_values, label="Fz")
+        #plt.plot(force_time_stamps, force_values, label="|F|", linestyle="--", color="k")
+        plt.plot(force_time_stamps, force_values, label="|F|")
+        add_state_markers()
+        plt.xlabel("time since start [s]")
+        plt.ylabel("accumulated force magnitude [N]")
+        plt.title("Haply Output Forces")
+        plt.grid(True)
+        plt.legend()
+        plt.tight_layout()
+        plt.show()
+    else:
+        print("No force data found.")
 
-    print(f"CSV-Datei gespeichert: {csv_path}")
+    # ---- Plot Position deviations ----
+    plt.figure(figsize=(10,4))
+    #plt.plot(time_stamps, position_errors)
+    add_state_markers()
+    plt.xlabel("time since start [s]")
+    plt.ylabel("distance to wire [m]")
+    plt.title("Position deviation from wire")
+    plt.grid(True)
+    plt.tight_layout()
+    plt.show()
+
 
 if __name__ == "__main__":
     main()
