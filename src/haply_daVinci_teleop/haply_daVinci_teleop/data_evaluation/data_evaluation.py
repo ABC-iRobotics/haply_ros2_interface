@@ -8,7 +8,7 @@ import matplotlib.pyplot as plt
 import numpy as np
 
 # --------- Configuration ----------
-BAG_PATH = Path.home() / "rosbags" / "Participant0_mode2_round2"
+BAG_PATH = Path.home() / "rosbags" / "Participant0_mode2_round3"
 csv_path = BAG_PATH / "rosbag_output.csv"
 
 TOPICS_OF_INTEREST = {
@@ -17,10 +17,29 @@ TOPICS_OF_INTEREST = {
     "/contact_status": "std_msgs/msg/Bool",
     "/PSM1/local/measured_cp": "geometry_msgs/msg/PoseStamped",
     "/haply_target": "haply_msgs/msg/HaplyControl",
+    "/loop_center": "geometry_msgs/msg/PointStamped",
 }
 
 RUNNING_STATES = {"RUNNING1", "RUNNING2", "RUNNING3", "RUNNING4", "RUNNING5"}
 # ----------------------------------
+def point_to_segment_distance(p, a, b):
+    """
+    Computes the shortest distance between point p and line segment ab.
+    """
+    ab = b - a
+    ap = p - a
+
+    denom = np.dot(ab, ab)
+    if denom == 0.0:
+        return np.linalg.norm(ap)
+
+    t = np.dot(ap, ab) / denom
+    t = np.clip(t, 0.0, 1.0)
+
+    closest = a + t * ab
+    return np.linalg.norm(p - closest)
+
+# ------------------ Main Evaluation Function -----------------
 def main():
     if not BAG_PATH.exists():
         raise FileNotFoundError(f"Rosbag not found: {BAG_PATH}")
@@ -49,6 +68,8 @@ def main():
     x_positions = []
     y_positions = []
     z_positions = []
+
+    loop_time_stamps = []
     loop_centers = []
     trial_states = []     
     # ---- force data container ----
@@ -61,17 +82,23 @@ def main():
     state_change_labels = []
     last_state = None
     # ---- wire points ----
-    given_wirepoints = [
+    given_wirepoints = np.array([
         [-0.05, 0.05, -0.2],
         [-0.05, 0.05, -0.16],
         [-0.02, 0.05, -0.16],
         [-0.02, 0.1, -0.16],
         [0.03, 0.1, -0.16],
         [0.03, 0.1, -0.2],
-    ]
+    ])
+    state_to_segment = {
+        "RUNNING1": (0, 1),
+        "RUNNING2": (1, 2),
+        "RUNNING3": (2, 3),
+        "RUNNING4": (3, 4),
+        "RUNNING5": (4, 5),
+    }
    
     current_trial_state = None 
-
     trial_running = False
     t0 = None  # Start of RUNNING phase
 
@@ -129,10 +156,20 @@ def main():
             fx_values.append(msg.force.x)
             fy_values.append(msg.force.y)
             fz_values.append(msg.force.z)
-
             continue
 
-        # -------- position data --------
+        # -------- Loop center --------
+        if topic == "/loop_center" and trial_running:
+            msg = deserialize_message(data, msg_types[topic])
+
+            t_loop = (timestamp - t0) * 1e-9
+
+            loop_time_stamps.append(t_loop)
+            loop_centers.append([msg.point.x, msg.point.y, msg.point.z])
+            trial_states.append(current_trial_state)
+            continue
+
+        # -------- Tool position --------
         if topic != "/PSM1/local/measured_cp" or not trial_running:
             continue
 
@@ -144,7 +181,6 @@ def main():
         x_positions.append(msg.pose.position.x)
         y_positions.append(msg.pose.position.y)
         z_positions.append(msg.pose.position.z)
-        trial_states.append(current_trial_state) 
     # ---- end of rosbag iteration ----
 
     print(f"Evaluated datapoints during RUNNING state: {len(x_positions)}.")
@@ -159,21 +195,24 @@ def main():
     x_positions = np.array(x_positions)
     y_positions = np.array(y_positions)
     z_positions = np.array(z_positions)
+
+    loop_time_stamps = np.array(loop_time_stamps)
     loop_centers = np.array(loop_centers)
 
-    # ---- Positionsabweichungen berechnen ----
-    wirepoints = np.array(given_wirepoints)
+    # ---- Distance computation ----
+    distances = np.zeros(len(loop_centers))
 
-    state_to_segment = {
-        "RUNNING1": (0, 1),
-        "RUNNING2": (1, 2),
-        "RUNNING3": (2, 3),
-        "RUNNING4": (3, 4),
-        "RUNNING5": (4, 5),
-    }
+    for i, (loopcenter, state) in enumerate(zip(loop_centers, trial_states)):
 
-    # To calculate by distance between loopcenter and wirepoints!
-    #position_errors[mask] = errors
+        if state not in state_to_segment:
+            distances[i] = np.nan
+            continue
+
+        idx_a, idx_b = state_to_segment[state]
+        a = given_wirepoints[idx_a]
+        b = given_wirepoints[idx_b]
+
+        distances[i] = point_to_segment_distance(loopcenter, a, b)
 
     # ---- Varianz berechnen ----
     #position_variance = np.var(position_errors)
@@ -232,7 +271,7 @@ def main():
 
     # ---- Plot Position deviations ----
     plt.figure(figsize=(10,4))
-    #plt.plot(time_stamps, position_errors)
+    plt.plot(loop_time_stamps, distances)
     add_state_markers()
     plt.xlabel("time since start [s]")
     plt.ylabel("distance to wire [m]")
