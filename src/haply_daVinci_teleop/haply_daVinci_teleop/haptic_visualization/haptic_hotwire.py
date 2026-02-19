@@ -6,8 +6,7 @@ from visualization_msgs.msg import Marker
 from geometry_msgs.msg import PoseStamped, Vector3, Point
 from haply_msgs.msg import HaplyState, HaplyControl
 from sensor_msgs.msg import JointState
-from std_msgs.msg import Bool
-
+from std_msgs.msg import Bool, String
 
 class HotWire(Node):
     """Visualizes a straight wire (cylinder) for the Hot Wire experiment"""
@@ -38,6 +37,7 @@ class HotWire(Node):
         self.loop_subscription = self.create_subscription(PoseStamped,"loop_center", self.loop_center_callback, 10)
         self.psm_cp_subscriber = self.create_subscription(PoseStamped, "/PSM1/local/measured_cp", self.psm_cp_callback, 10)
         self.gripper_subscriber = self.create_subscription(JointState, "/PSM1/jaw/measured_js", self.gripper_callback, 10)
+        self.trial_state_subscriber = self.create_subscription(String, "/trial/state", self.trial_state_callback, 10)
         
         # Store current loop orientation for angle calculation
         self.loop_orientation = None
@@ -82,6 +82,9 @@ class HotWire(Node):
         self.outer_limit_deadzone = self.loop_radius + 0.005
         self.midzone = (self.inner_limit_deadzone + self.outer_limit_deadzone) / 2.0
 
+        # Store current trial state for force activation
+        self.current_trial_state = None
+
         self.current_psm_cp = None
         self.closest_distance = 999
         self.closest_wire_segment_vector = None
@@ -96,6 +99,11 @@ class HotWire(Node):
     def psm_cp_callback(self, msg: PoseStamped):
         """ Store current PSM1 cartesian position """
         self.current_psm_cp = [msg.pose.position.x, msg.pose.position.y, msg.pose.position.z]
+    
+    # -------------------------------------------------------------------------
+    def trial_state_callback(self, msg: String):
+        """ Store current trial state for force activation """
+        self.current_trial_state = msg.data
 
     # -------------------------------------------------------------------------
     def publish_contact_status(self):
@@ -196,7 +204,7 @@ class HotWire(Node):
                 closest_force_vector = force_vector
                 self.closest_wire_segment_vector = [wire_end_point[i] - wire_start_point[i] for i in range(3)]
 
-        if closest_force_vector is None or self.gripper_closed == False:
+        if closest_force_vector is None or self.gripper_closed == False or self.current_trial_state not in ["RUNNING1", "RUNNING2", "RUNNING3", "RUNNING4", "RUNNING5"]:
             return [0.0, 0.0, 0.0]
 
         return [

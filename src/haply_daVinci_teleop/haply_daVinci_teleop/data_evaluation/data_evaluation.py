@@ -8,7 +8,7 @@ import matplotlib.pyplot as plt
 import numpy as np
 
 # --------- Configuration ----------
-BAG_PATH = Path.home() / "rosbags" / "Participant0_mode2_round3"
+BAG_PATH = Path.home() / "rosbags" / "Participant1_mode2_round1"
 csv_path = BAG_PATH / "rosbag_output.csv"
 
 TOPICS_OF_INTEREST = {
@@ -183,7 +183,7 @@ def main():
         z_positions.append(msg.pose.position.z)
     # ---- end of rosbag iteration ----
 
-    print(f"Evaluated datapoints during RUNNING state: {len(x_positions)}.")
+    #print(f"Evaluated datapoints during RUNNING state: {len(x_positions)}.")
     print(f"Number contacts during RUNNING state: {contact_count}")
 
     if len(x_positions) == 0:
@@ -229,7 +229,7 @@ def main():
 
     force_values = np.sqrt(fx_values**2 + fy_values**2 + fz_values**2)
 
-    print(f"Benötigte Zeit: {time_stamps[-1] - time_stamps[0]:.2f} s")
+    print(f"Time needed: {time_stamps[-1] - time_stamps[0]:.2f} s")
 
     # ---- helper function to add state change markers ----
     def add_state_markers():
