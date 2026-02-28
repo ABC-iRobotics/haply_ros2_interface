@@ -8,7 +8,7 @@ import matplotlib.pyplot as plt
 import numpy as np
 
 # --------- Configuration ----------
-BAG_PATH = Path.home() / "rosbags" / "Participant1_mode2_round1"
+BAG_PATH = Path.home() / "rosbags" / "Participant6_mode1_round1"
 csv_path = BAG_PATH / "rosbag_output.csv"
 
 TOPICS_OF_INTEREST = {
