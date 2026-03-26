@@ -6,9 +6,10 @@ from rosidl_runtime_py.utilities import get_message
 from pathlib import Path
 import matplotlib.pyplot as plt
 import numpy as np
+import tikzplotlib
 
 # --------- Configuration ----------
-BAG_PATH = Path.home() / "rosbags" / "Participant6_mode1_round1"
+BAG_PATH = Path.home() / "rosbags" / "Participant1_mode0_round1"
 csv_path = BAG_PATH / "rosbag_output.csv"
 
 TOPICS_OF_INTEREST = {
@@ -260,11 +261,17 @@ def main():
         plt.plot(force_time_stamps, force_values, label="|F|")
         add_state_markers()
         plt.xlabel("time since start [s]")
-        plt.ylabel("accumulated force magnitude [N]")
+        plt.ylabel("force magnitude [N]")
         plt.title("Haply Output Forces")
         plt.grid(True)
         plt.legend()
+        plt.legend(loc="upper left", bbox_to_anchor=(1, 1))
         plt.tight_layout()
+
+        tikzplotlib.save("/mnt/c/Users/hiwi_student/Documents/Haply_daVinci_system/tikz_files/force_magnitude_p1_m0.tex",
+            axis_width='18cm',
+            axis_height='12cm',
+        )
         plt.show()
     else:
         print("No force data found.")
