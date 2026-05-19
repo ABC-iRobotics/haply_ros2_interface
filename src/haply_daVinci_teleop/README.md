@@ -1,271 +1,482 @@
-# Haply-DaVinci Teleoperation
+# Haply-daVinci Teleoperation
 
-This package provides a ROS2 teleoperation bridge for controlling the **daVinci PSM1 arm** with the **Haply Inverse3** and the **VerseGrip Stylus (Handle)**. Further it provides the use of Haptic Forcefeedback for conducting a hot wire task. Useable both in simulation and on the real system.
-This Readme will also lead you through the process of setting up a hotwire experiment using force-feedback.
+This ROS 2 package connects a **Haply Inverse3** with a **VerseGrip stylus** to the
+**da Vinci Research Kit PSM1 arm**. It provides teleoperation, gripper control,
+loop and wire visualization, force feedback for a hotwire task, contact-state
+publishing, and helper nodes for study execution and data recording.
 
-This implementation was tested on:
-- Windows 11 (WSL2 Ubuntu 22.04 LTS (64-bit))
+The package can be used with the real da Vinci system and with simulated
+visualization/contact workflows. The current implementation was tested with:
+
+- Windows 10 with WSL2 Ubuntu 22.04 LTS
 - Ubuntu 24.04.3 LTS
+- ROS2 Humble 
 - Python 3.10.6
 
 ## Contents
-- [Package structure](#package-structure)
-    - [Bridge](#bridge)
-    - [Haptic visualization](#haptic_visualization)
-    - [Contact detection](#contact-detection)
-- [Setup the system](#setup-the-system)
-    - [Start daVinci](#start-davinci)
-    - [Start cameras](#start-cameras)
-    - [Haply caibration](#haply-calibration)
-    - [Start Haply and Bridge](#start-haply-and-bridge)
-    - [Make measurements](#make-measurements)
-    - [Conducting the hotwire task](#conducting-the-hotwire-task)
-    - [Count the number of touches](#count-the-number-of-touches)
+
+- [Package Structure](#package-structure)
+- [Nodes and Interfaces](#nodes-and-interfaces)
+- [Build and Source](#build-and-source)
+- [Running the System](#running-the-system)
+- [Hotwire Experiment Workflow](#hotwire-experiment-workflow)
+- [Controls](#controls)
+- [Contact Counting](#contact-counting)
+- [Data Recording](#data-recording)
 - [Troubleshooting](#troubleshooting)
 - [Pre-study Learnings](#pre-study-learnings)
 
-## Package structure
+## Package Structure
 
-### Bridge:
-The bridge enables the translation of movements from the Haply device to the da Vinci PSM1 arm. It also incorporates a clutch mechanism as well as gripper control. Communication is based on dVRK CRTK messages.
-For more detailed information, please refer to the following [webpage](https://dvrk.readthedocs.io/2.3.0/pages/development/api/introduction.html)
+```text
+haply_daVinci_teleop/
++-- bridge/
+|   +-- haply_daVinci_bridge_node_jointcontrol.py
+|   +-- haply_daVinci_bridge_node_baseframe.py
++-- haptic_visualization/
+|   +-- haptic_hotwire.py
+|   +-- haptic_loop.py
++-- contact_detection/
+|   +-- ContactDetection.ino
+|   +-- simulated_contact_detection.py
++-- data_evaluation/
+|   +-- study_controller.py
+|   +-- data_evaluation.py
+|   +-- data_visualization.py
+|   +-- questionnaire_evaluation.py
++-- launch/
+    +-- teleop_launch.py
+```
 
- #### haply_daVinci_bridge_node_jointcontrol.py
- ---
-This ROS2 node maps Haply haptic device inputs to da Vinci PSM1 robot joint commands using the CRTK interface.
+### Bridge
 
-#### Features
-- Reads HaplyState for position, orientation and button presses
-- Reads da Vinci joint states via `/PSM1/measured_js`
-- Computes Cartesian and rotational deltas relative to a calibrated reference position
-- Sends joint commands using CRTK servo_jp and servo_cp
-- Button A: toggles gripper open/close
-- Button B: clutching (freezes robot position while pressing)
+The bridge maps Haply device movement and stylus buttons to da Vinci PSM1
+commands through the dVRK CRTK interface.
 
-#### Usage
-    ros2 run haply_daVinci_teleop haply_to_davinci_bridge.py
+`haply_daVinci_bridge_node_jointcontrol.py` is the main teleoperation bridge.
+It subscribes to Haply state and PSM1 joint state, calibrates the initial Haply
+pose against the current robot joint configuration, then sends joint targets to
+the PSM1.
 
-#### Notes
-- Calibration occurs once at startup when the first HaplyState arrives.
-- Rotation is unwrapped to avoid sudden jumps on yaw.
-- Motion/rotation scaling factors are easily adjustable in the script.
+Main behavior:
 
-#### haply_daVinci_bridge_node_baseframe.py (experimental)
----
+- Reads `haply_msgs/HaplyState` from `haply_state`
+- Reads PSM1 joints from `/PSM1/measured_js`
+- Maps Haply translation and orientation offsets to PSM1 joint targets
+- Uses Button A to toggle the gripper
+- Uses Button B to recalibrate the translational reference position
+- Handles continuous yaw unwrapping to avoid jumps around +/- pi
 
-This ROS2 node uses Cartesian control and maps Haply position/orientation offsets into daVinci end-effector motion in PSM1 base frame.
+Run manually:
 
-#### Features
-- PSM control from Haply Cartesian motion
-- Calibration via Haply Button B
-- First B press: position + orientation reference
-- Subsequent B press: position-only recalibration
-- Haply Button A toggles gripper open/close
-- Adjustable scaling factors
+```bash
+ros2 run haply_daVinci_teleop haply_daVinci_bridge_node_jointcontrol
+```
 
-#### Usage
-    ros2 run haply_daVinci_teleop haply_to_davinci_pose.py
+`haply_daVinci_bridge_node_baseframe.py` is an experimental Cartesian-control
+bridge. It is not installed as a console script in the current `setup.py`, so it
+is mainly kept as reference/development code.
 
----
+### Haptic Visualization
 
-### Haptic_visualization
-The haptic visualization has two main tasks: It calculates a digital twin of a real wire by using measurements of the edge points of the wire path. Further it calculates the loopcenter and orientation out of the gripper pose. 
-Further a force feedback is calculated and send to the Haply.
+The haptic visualization nodes build the digital representation of the hotwire
+task. They publish RViz markers, track the loop attached to the gripper, compute
+the distance between loop and wire, and publish Haply force commands.
 
-#### haptic_hotwire.py
----
+`haptic_hotwire.py`:
 
-#### Overview
-This ROS2 node visualizes a straight wire (as a cylinder) and provides haptic feedback for the Hot Wire experiment using a Haply device. It also allows measuring and publishing the position of a loop moving along the wire.
+- Visualizes the wire as RViz cylinder markers
+- Computes force feedback from the loop-to-wire distance
+- Publishes force commands on `haply_target`
+- Publishes contact status on `contact_status`
+- Supports three force feedback modes through the `mode` ROS parameter
+- Can measure wire points when `measure_wirepoints_mode` is enabled in the code
 
-#### Features
-- Visualizes wire segments in RViz using `visualization_msgs/Marker`.
-- Computes haptic forces for Haply based on distance from loop to wire.
-- Publishes haptic commands using `haply_msgs/HaplyControl`.
-- Supports measuring wire points interactively via Haply Button C.
-- Configurable force feedback modes: off, linear, or stepwise.
-- Supports predefined or measured wirepoints.
+Run manually:
 
-#### Publishers
-- `hotwire_marker` (`Marker`): Visualizes wire segments in RViz.
-- `haply_target` (`HaplyControl`): Publishes haptic force commands to Haply.
+```bash
+ros2 run haply_daVinci_teleop haptic_hotwire --ros-args -p mode:=1
+```
 
-#### Usage
-    ros2 run haply_daVinci_teleop hot_wire_node
+`haptic_loop.py`:
 
-#### haptic_loop.py
----
+- Visualizes the loop attached to the PSM1 gripper
+- Publishes the calculated loop center on `loop_center`
+- Uses `/PSM1/local/measured_cp` and `/PSM1/jaw/measured_js`
+- Publishes a static `world -> PSM1_base` transform for RViz visualization
 
-#### Overview
-This ROS2 node visualizes a loop attached to the PSM1 gripper using a single Marker in RViz and publishes the loop's center pose. It is designed for haptic interaction experiments, allowing visualization and tracking of the loop in the world frame.
+Run manually:
 
-#### Features
-- Visualizes the loop in RViz as a LINE_STRIP marker.
-- Publishes the loop's center pose as PoseStamped on loop_center.
-- Automatically transforms gripper pose to the world frame for consistent visualization.
-- Supports loop radius, thickness, offsets, and segmentation configuration.
-- Applies additional rotation to align the loop plane with the gripper jaws.
-- Updates visualization in real-time at high frequency (1 kHz timer).
+```bash
+ros2 run haply_daVinci_teleop haptic_loop
+```
 
-#### Publishers
-- `loop_marker` (`Marker`): Visualizes the loop in RViz.
-- `loop_center` (`PoseStamped`): Publishes the center position and orientation of the loop.
+### Study Controller
 
-#### Usage
-1. Launch ROS2 and ensure the PSM1 gripper node is running.
-2. Start the HapticLoop node:
-   ros2 run haply_daVinci_teleop haptic_loop_node
-    
----
+`study_controller.py` tracks the progress of the hotwire task by checking
+whether the loop center enters a sequence of tolerance regions. It publishes the
+current trial state and RViz markers for the target regions.
+
+Run manually:
+
+```bash
+ros2 run haply_daVinci_teleop study_controller
+```
+
+Trial states:
+
+- `IDLE`
+- `RUNNING1`
+- `RUNNING2`
+- `RUNNING3`
+- `RUNNING4`
+- `RUNNING5`
+- `FINISHED`
+
 ### Contact Detection
-To detect loop-wire contacts it is recommended to use a ESP32 development board. The following script can be flashed on the ESP board using the Arduino IDE.
 
-#### ContactDetection.ino
----
+For the physical setup, `ContactDetection.ino` can be flashed to an ESP32 to
+count electrical contact events between the loop and the wire.
 
-#### Overview
-This script runs on an ESP32 and detects contacts with a hotwire using a digital input pin. It counts the number of contacts and prints the information over the serial port.
+The package also contains `simulated_contact_detection.py`, which is intended
+for marker-based contact estimation during simulation/development. It is not
+currently installed as a console script.
 
-#### Hardware
-- ESP32 microcontroller
-- Hotwire connected to GPIO 25 (configured with internal pull-up resistor) and a 100 ohm resistor in series
-- Loop connected to Ground
+## Nodes and Interfaces
 
-#### Features
-- Detects contact when the hotwire circuit is completed (pin reads LOW).
-- Implements a 0.5-second lockout to prevent multiple counts from a single touch.
-- Counts and prints the number of contacts over the serial interface.
+### Installed ROS 2 executables
 
-#### Usage
-1. Connect the hotwire to GPIO 25 on the ESP32.
-2. Upload the script to the ESP32 using Arduino IDE or PlatformIO.
-3. Open the Serial Monitor at 115200 baud to view contact detection messages.
-4. Touch the hotwire to see contact counts increment in the serial output.
+The following console scripts are installed by this package:
 
-#### Notes
-- The script uses a simple debounce/lockout mechanism to prevent multiple triggers from a single touch.
-- Adjust the lockout duration by changing the 500 ms value in the if statement if needed.
-- The script uses a 10 ms loop delay to reduce CPU usage.
----
+```bash
+ros2 run haply_daVinci_teleop haply_daVinci_bridge_node_jointcontrol
+ros2 run haply_daVinci_teleop haptic_hotwire
+ros2 run haply_daVinci_teleop haptic_loop
+ros2 run haply_daVinci_teleop study_controller
+```
 
-## Setup the system
-### Start daVinci: 
-To prepare the workspace for conducting a hotwire experiment on the real daVinci system you will need to turn on the daVinci. Using the terminal in the ubuntu os you can use following commands to do that. Be aware that this can change due to it's not part of this repo:
+### Main launch file
 
-    cd ~/ros2_ws/src/dvrk/dvrk_config_oe
-    ros2 run dvrk_robot dvrk_system -j OE-daVinci/system-MTMR-PSM1-Teleop.json
+The package provides one launch file:
 
-After opening the GUI press start and home the daVinci system
-    
-### Start cameras:
-As visual Feedback it is recommended to use the camera system of the daVinci Research Kit System and the Googles for better depth perception. You can start the cameras using the following commands.
+```bash
+ros2 launch haply_daVinci_teleop teleop_launch.py mode:=1
+```
 
-Camera1:
+This starts:
 
-    gst-launch-1.0 decklinkvideosrc mode=pal device-number=0 ! videorate ! "video/x-raw,framerate=30/1" ! glimagesink
+- `haptic_hotwire`
+- `haply_daVinci_bridge_node_jointcontrol`
+- `haptic_loop`
+- `study_controller`
 
-Camera2:
+The `mode` launch argument is passed to `haptic_hotwire`.
 
-    gst-launch-1.0 decklinkvideosrc mode=pal device-number=1 ! videorate ! "video/x-raw,framerate=30/1" ! glimagesink
+### Important topics
 
-### Haply calibration:
-After setting up the daVinci you will need to calibrate the Haply device. Therfore it is recommended to use the Haply software. You can open it by using the following commands. Be aware that the path can differ.
-    
-    cd ~/Downloads/squashfs-root
-    ./AppRun
-    
-Please follow the instructions for calibrating the Haply and the Inverse grip.
-    
-### Start Haply and Bridge:
-For using the Haply for the controle of the daVinci PSM1 arm please start its driver and the haply control bridge using the following commands.
+Subscribed topics:
 
-Run Haply driver:
+- `haply_state` (`haply_msgs/HaplyState`)
+- `/PSM1/measured_js` (`sensor_msgs/JointState`)
+- `/PSM1/local/measured_cp` (`geometry_msgs/PoseStamped`)
+- `/PSM1/jaw/measured_js` (`sensor_msgs/JointState`)
+- `loop_center` (`geometry_msgs/PoseStamped`)
+- `/trial/state` (`std_msgs/String`)
 
-    cd ~/haply_ros2_interface
-    ros2 run haply_interface haply_driver_node
- 
-Run Haply-daVinci bridge
+Published topics:
 
-    cd ~/haply_ros2_interface
-    ros2 run haply_daVinci_teleop haply_bridge_jointcontrol
+- `haply_target` (`haply_msgs/HaplyControl`)
+- `hotwire_marker` (`visualization_msgs/Marker`)
+- `loop_marker` (`visualization_msgs/Marker`)
+- `loop_center` (`geometry_msgs/PoseStamped`)
+- `contact_status` (`std_msgs/Bool`)
+- `/trial/state` (`std_msgs/String`)
+- `/trial/tolerance_marker` (`visualization_msgs/Marker`)
 
+## Build and Source
 
-### Make measurements:
-For conducting the hotwire task with forcefeedback it is crucial that the simulated wire fits with the position of the real wire. Therefore you need to measure the edge points of the wire by starting the haptic hotwire script in mode 0 and set the variable self.measure_wirepoints_mode = True.
+From the workspace root:
 
-Run Haptic Hotwire:
+```bash
+cd ~/haply_ros2_interface
+colcon build --packages-select haply_daVinci_teleop
+source install/setup.bash
+```
 
-    cd ~/haply_ros2_interface/src/haply_daVinci_teleop/haply_daVinci_teleop/visualization
-    python3 haptic_hotwire.py
+If the package was already built, sourcing the workspace is enough:
 
-After starting the script you will be able to measure the wire edges by pressing Button C of the Inverse3 pen. Be aware to only press it for a short time because pressing long leads to a recalibration of the Inverse3 pen. For measuring open the gripper with Button A, lead it to the wire edge and press Button C. 
+```bash
+cd ~/haply_ros2_interface
+source install/setup.bash
+```
 
-### Conducting the hotwire task:
-For conducting the task you can currently choose between three different modes:
+## Running the System
 
-- Without force feedback **mode0**
-- With force feedback **mode1**
-- With force feedback **mode2**
+### 1. Start the da Vinci system
 
-Choose the mode by manipulate the python script (needs to be changed!).
-After selection of the mode, start the haptic wire node by using the following command:
+Start the dVRK system from the dVRK configuration workspace. The exact path can
+differ between machines and is not part of this repository.
 
-    cd ~/haply_ros2_interface/src/haply_daVinci_teleop/haply_daVinci_teleop/visualization
-        python3 haptic_hotwire.py
+Example:
 
-You will also need to start the haptic loop node for Force Feedback calculation:
+```bash
+cd ~/ros2_ws/src/dvrk/dvrk_config_oe
+ros2 run dvrk_robot dvrk_system -j OE-daVinci/system-MTMR-PSM1-Teleop.json
+```
 
-    cd ~/haply_ros2_interface
-		ros2 run haply_daVinci_teleop haptic_loop
+After the GUI opens, press **Start** and home the da Vinci system.
 
-Be aware, as soon as you start force feedback the manipulator will be pushed towards the wire if it's getting close. That is due to the fact, that it can't detect if a loop is attached!
+### 2. Start the cameras
 
-### Count the number of touches:
-For counting the number of touches you can use an **ESP32 Development Board** using the script **Contact Detection** or just open the Arduino IDE with:
+For visual feedback, use the da Vinci camera system and goggles if available.
 
-    cd ~/Downloads
-		./arduino-ide_2.3.6_Linux_64bit.AppImage --no-sandbox	
+Camera 1:
 
-To run the ESP32 connect pin G25 with a resistance (100 ohm recommended) in series and connect it with the hotwire (using a normal wire). The loop must be connected with Ground. After uploading the Software you will be able to see the number of touches as Serial Output.
+```bash
+gst-launch-1.0 decklinkvideosrc mode=pal device-number=0 ! videorate ! "video/x-raw,framerate=30/1" ! glimagesink
+```
 
-- Optinaly start a rosbag to collect data:
-For collecting data it is recommended to use a rosbag. You can start one with the following command:
-    
-    ros2 bag record -o /home/lorant/Desktop/Haply_study_rosbags/Participant5_mode0_round2 /haply_target /hotwire_marker /haply_state /loop_center /PSM1/local/measured_cp
+Camera 2:
 
-This rosbag records the positions of loop, wire and robot as well es the Haply data which also contains the calculated force.
+```bash
+gst-launch-1.0 decklinkvideosrc mode=pal device-number=1 ! videorate ! "video/x-raw,framerate=30/1" ! glimagesink
+```
 
-## Troubleshooting:
-### 1) DaVinci stops moving: 
-- Check if you can still control the position:
-    - if yes: There are two known possibilities:
-        - You likely reached the workspace limit of the DaVinci end effector.
-        No worries, simply rotate the Inverse3 back. The Inverse3 has no rotation limit and can exceed 360°, while the DaVinci cannot. If the Inverse3 is rotated too far in one direction, it sends positions outside the DaVinci workspace, causing the system to stop responding.
+### 3. Calibrate the Haply device
 
-        - The InverseGrip likely powered off.
-        In this case, shut down the DaVinci, the Haply driver, and the haply_daVinci_bridge. Restart the Inverse3, recalibrate it, and check the battery level. If everything looks good, reattach it to the Haply, home the DaVinci, then start the DaVinci, the Haply driver, and finally the haply_daVinci_bridge again.
+Use the Haply software to calibrate the Inverse3 and VerseGrip. The path can
+differ between machines.
 
-    - if no: Check the following:
-        - Check if the haply driver threw an error:
-        Likely a wire connection issue. Power down the DaVinci and the haply_daVinci_bridge, then restart them in this order: haply_driver, DaVinci, haply_daVinci_bridge. Ensure the DaVinci was homed correctly and the Haply is manually aligned.
+Example:
 
-        - Check if the daVinci turned off:
-        Most likely the Haply transmitted a pose/rotation outside of the DaVinci workspace, often caused by fast or aggressive movements, or a short connection dropout. You can resolve this by shutting down the haply_daVinci_bridge, homing and restarting the DaVinci, and then relaunching the haply_daVinci_bridge. Verify again that both DaVinci and Haply are homed and aligned properly.
+```bash
+cd ~/Downloads/squashfs-root
+./AppRun
+```
 
-### 2) DaVinci movements are mirrored:
-- Most likely the DaVinci and Haply were not homed correctly.
-Turn off the DaVinci, haply_daVinci_bridge, and the Haply driver. Home the Haply and the Inverse3 again, the Haply must be physically aligned, and the Inverse3 should be oriented so that the buttons face toward the user. The DaVinci needs to be homed as well. Also ensure that the gripper is centered and positioned within its rotational range.
-   
+Follow the Haply calibration instructions. Make sure the Inverse3 and VerseGrip
+are physically aligned before starting teleoperation.
 
-## Pre-study Learnings:
-1) Explaining the teleop device: 
-Training efficiency strongly depends on how the teleoperation system is introduced. It is recommended to clearly communicate that the setup is experimental and not fully equipped with safety limits. This tends to result in calmer, more controlled user behaviour and helps participants build confidence without rushing. By reducing stress and setting realistic expectations, users understand the system faster, adapt more naturally, and are less frustrated when unexpected behaviour occurs, especially near workspace boundaries where fast movements can trigger errors.
+### 4. Start the Haply driver
 
-2) Task explanation: 
-How the task is framed shapes user strategy. If you present multiple objectives"as fast as possible and with as few collisions as possible" users will instinctively prioritise one. To keep behaviour consistent and comparable, it’s better to specify a single clear goal rather than giving multiple competing targets.
+Start the Haply driver from the workspace:
 
-3) Training time:
-Sufficient practice time, both with and without force feedback, is essential to actually observe the benefit of haptics. Participants often rely heavily on visual information, and unexpected force cues can feel counter-intuitive at first. If a force pushes them away from what they believe is the correct position, they tend to fight against it, which causes confusion and poor performance. Without proper familiarisation time, the results mostly reflect learning effects rather than the impact of force feedback itself.
+```bash
+cd ~/haply_ros2_interface
+source install/setup.bash
+ros2 run haply_interface haply_driver_node
+```
 
-4) Deviations between simulation and reality:
-The simulated wire is modelled as a straight segment between edge points, but real wires bend, curve and rarely align perfectly. The loop’s centre can also shift if the gripper doesn’t pick it up precisely. These geometric differences cause force inaccuracies and position errors. Using a wire that is as straight as possible, and ensuring the gripper engages the loop cleanly and consistently, significantly reduces these deviations.
+The driver should publish `haply_state` and subscribe to `haply_target`.
+
+### 5. Launch the teleoperation package
+
+Recommended startup:
+
+```bash
+cd ~/haply_ros2_interface
+source install/setup.bash
+ros2 launch haply_daVinci_teleop teleop_launch.py mode:=1
+```
+
+Available force feedback modes:
+
+- `mode:=0`: no force feedback
+- `mode:=1`: linear force feedback
+- `mode:=2`: stepwise force feedback
+
+Manual startup alternative:
+
+```bash
+ros2 run haply_daVinci_teleop haptic_hotwire --ros-args -p mode:=1
+ros2 run haply_daVinci_teleop haptic_loop
+ros2 run haply_daVinci_teleop study_controller
+ros2 run haply_daVinci_teleop haply_daVinci_bridge_node_jointcontrol
+```
+
+## Hotwire Experiment Workflow
+
+### Measure the wire points
+
+For accurate force feedback, the digital wire should match the physical wire.
+The hotwire node can measure wire edge points using Button C on the VerseGrip.
+
+Current limitation: wire measurement is controlled by the hardcoded variable
+`self.measure_wirepoints_mode` in `haptic_hotwire.py`.
+
+To measure new wire points:
+
+1. Open `haply_daVinci_teleop/haptic_visualization/haptic_hotwire.py`.
+2. Set:
+
+   ```python
+   self.measure_wirepoints_mode = True
+   ```
+
+3. Start the hotwire node:
+
+   ```bash
+   ros2 run haply_daVinci_teleop haptic_hotwire --ros-args -p mode:=0
+   ```
+
+4. Move the gripper to each wire edge point and briefly press Button C.
+
+Press Button C only briefly. A long press can trigger recalibration behavior on
+the Haply device.
+
+When using predefined points, keep:
+
+```python
+self.measure_wirepoints_mode = False
+```
+
+and update `self.given_wirepoints` if the physical wire geometry changes.
+
+### Run a trial
+
+1. Start the da Vinci system and cameras.
+2. Calibrate the Haply device.
+3. Start the Haply driver.
+4. Launch this package with the desired force feedback mode.
+5. Open RViz if visualization is needed.
+6. Move the loop to the start point to enter `RUNNING1`.
+7. Follow the hotwire path until the state reaches `FINISHED`.
+8. Move to the reset point to return to `IDLE`.
+
+Be careful when enabling force feedback. The Haply can apply forces toward or
+away from the virtual wire based on the loop position. Make sure the physical
+loop is attached and the digital wire is aligned before running a participant
+trial.
+
+## Controls
+
+VerseGrip buttons:
+
+- Button A: toggle PSM1 gripper open/closed
+- Button B: recalibrate the Haply translational reference for teleoperation
+- Button C: add wire measurement point when wire measurement mode is enabled
+
+## Contact Counting
+
+### ESP32 contact detection
+
+For physical contact counting, flash `contact_detection/ContactDetection.ino`
+to an ESP32 using the Arduino IDE or PlatformIO.
+
+Hardware setup:
+
+- Connect the hotwire to GPIO 25 through a 100 ohm series resistor.
+- Connect the loop to ground.
+- Open the serial monitor at 115200 baud.
+
+The ESP32 counts a contact when the circuit is closed and the input pin reads
+LOW. The script uses a 0.5 second lockout to avoid counting one long touch
+multiple times.
+
+Example command to start the Arduino IDE:
+
+```bash
+cd ~/Downloads
+./arduino-ide_2.3.6_Linux_64bit.AppImage --no-sandbox
+```
+
+### ROS contact status
+
+The hotwire node also publishes `contact_status` as `std_msgs/Bool`. This is
+computed from the digital loop and wire geometry.
+
+## Data Recording
+
+For experiments, record the relevant ROS topics with rosbag.
+
+Example:
+
+```bash
+ros2 bag record -o /home/lorant/Desktop/Haply_study_rosbags/Participant5_mode0_round2 \
+  /haply_target \
+  /hotwire_marker \
+  /haply_state \
+  /loop_center \
+  /PSM1/local/measured_cp \
+  /contact_status \
+  /trial/state
+```
+
+This records Haply state, computed forces, wire visualization, loop position,
+PSM1 Cartesian pose, contact status, and trial state.
+
+## Troubleshooting
+
+### Da Vinci stops moving
+
+If Cartesian or joint control still works, one of the following is likely:
+
+- The robot reached a workspace or joint limit. Rotate or move the Haply back
+  toward the calibrated neutral pose. The Haply can rotate beyond 360 degrees,
+  but the da Vinci cannot.
+- The VerseGrip powered off. Shut down the bridge, Haply driver, and da Vinci
+  control. Restart the VerseGrip, recalibrate it, check the battery level, home
+  the da Vinci, then start the Haply driver and bridge again.
+
+If control no longer works:
+
+- Check whether the Haply driver reported a connection or device error.
+- Check whether the da Vinci disabled itself because a target was outside the
+  valid workspace.
+- Restart in this order: Haply driver, da Vinci system, teleoperation bridge.
+- Make sure the da Vinci and Haply are both homed and physically aligned.
+
+### Da Vinci movements are mirrored
+
+This is usually caused by incorrect homing or physical alignment.
+
+Recommended recovery:
+
+1. Stop the bridge.
+2. Stop the Haply driver.
+3. Re-home and recalibrate the Haply.
+4. Place the VerseGrip so the buttons face the user.
+5. Home the da Vinci again.
+6. Make sure the gripper is centered and within its rotational range.
+7. Restart the Haply driver and bridge.
+
+### Force feedback feels wrong
+
+Check the following:
+
+- The measured or predefined wire points match the real wire.
+- The loop is attached correctly in the gripper.
+- The gripper state is detected correctly through `/PSM1/jaw/measured_js`.
+- The trial state is one of `RUNNING1` to `RUNNING5`; otherwise forces are
+  intentionally disabled.
+- The selected mode is correct.
+
+## Pre-study Learnings
+
+### 1. Explain the teleoperation device clearly
+
+Training efficiency strongly depends on how the teleoperation system is
+introduced. It is recommended to explain that the setup is experimental and not
+fully equipped with safety limits. This helps participants move more calmly and
+avoid fast motions near workspace boundaries.
+
+### 2. Give one clear task objective
+
+How the task is framed affects participant strategy. If participants are told
+to be both fast and collision-free, they may prioritize one objective
+differently. A single clear goal leads to more comparable behavior.
+
+### 3. Allow enough training time
+
+Practice with and without force feedback is important. Participants often rely
+heavily on visual feedback, and haptic cues can feel unintuitive at first. With
+too little familiarization, results may mostly show learning effects instead of
+the effect of force feedback.
+
+### 4. Reduce deviations between simulation and reality
+
+The virtual wire is modeled as straight segments between edge points, but the
+real wire can bend and may not align perfectly. The loop center can also shift
+if the gripper does not pick up the loop consistently. A straight wire, careful
+wire-point measurement, and consistent loop grasping improve the force-feedback
+quality.
