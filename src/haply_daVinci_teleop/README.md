@@ -20,6 +20,7 @@ visualization/contact workflows. The current implementation was tested with:
 - [Build and Source](#build-and-source)
 - [Running the System](#running-the-system)
 - [Hotwire Experiment Workflow](#hotwire-experiment-workflow)
+- [Demo Workflow](#demo-workflow)
 - [Controls](#controls)
 - [Contact Counting](#contact-counting)
 - [Data Recording](#data-recording)
@@ -150,9 +151,12 @@ The following console scripts are installed by this package:
 
 ```bash
 ros2 run haply_daVinci_teleop haply_daVinci_bridge_node_jointcontrol
+ros2 run haply_daVinci_teleop haply_daVinci_bridge_node_jointcontrol_demo
 ros2 run haply_daVinci_teleop haptic_hotwire
+ros2 run haply_daVinci_teleop haptic_hotwire_demo
 ros2 run haply_daVinci_teleop haptic_loop
 ros2 run haply_daVinci_teleop study_controller
+ros2 run haply_daVinci_teleop study_controller_demo
 ```
 
 ### Main launch file
@@ -347,6 +351,35 @@ Be careful when enabling force feedback. The Haply can apply forces toward or
 away from the virtual wire based on the loop position. Make sure the physical
 loop is attached and the digital wire is aligned before running a participant
 trial.
+
+## Demo Workflow
+
+For short demonstrations, the package provides a separate demo setup. The
+original experiment nodes remain unchanged.
+
+Start the demo with:
+
+```bash
+ros2 launch haply_daVinci_teleop teleop_demo_launch.py mode:=1
+```
+
+The demo launch starts:
+
+- `haptic_hotwire_demo`
+- `haply_daVinci_bridge_node_jointcontrol_demo`
+- `haptic_loop`
+- `study_controller_demo`
+
+Demo behavior:
+
+- The hotwire uses only three predefined wire points.
+- The study controller uses a shorter start-middle-end sequence.
+- The teleoperation bridge locks the PSM1 z/insertion joint at the calibrated
+  start value, so Haply z translation does not move the robot in z direction.
+- The `mode` argument still selects the force feedback mode:
+  - `mode:=0`: no force feedback
+  - `mode:=1`: linear force feedback
+  - `mode:=2`: stepwise force feedback
 
 ## Controls
 

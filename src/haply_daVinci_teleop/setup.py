@@ -13,7 +13,7 @@ setup(
             ['resource/' + package_name]),
         ('share/' + package_name, ['package.xml']),
         (os.path.join('share', package_name, 'launch'),
-            ['launch/teleop_launch.py']),
+            glob('launch/*.py')),
     ],
     install_requires=['setuptools'],
     zip_safe=True,
@@ -25,9 +25,12 @@ setup(
     entry_points={
         'console_scripts': [
             'haply_daVinci_bridge_node_jointcontrol = haply_daVinci_teleop.bridge.haply_daVinci_bridge_node_jointcontrol:main',    
+            'haply_daVinci_bridge_node_jointcontrol_demo = haply_daVinci_teleop.bridge.haply_daVinci_bridge_node_jointcontrol_demo:main',
             'haptic_loop = haply_daVinci_teleop.haptic_visualization.haptic_loop:main',
             'haptic_hotwire = haply_daVinci_teleop.haptic_visualization.haptic_hotwire:main',
+            'haptic_hotwire_demo = haply_daVinci_teleop.haptic_visualization.haptic_hotwire_demo:main',
             'study_controller = haply_daVinci_teleop.data_evaluation.study_controller:main',
+            'study_controller_demo = haply_daVinci_teleop.data_evaluation.study_controller_demo:main',
         ],
     },
 )
