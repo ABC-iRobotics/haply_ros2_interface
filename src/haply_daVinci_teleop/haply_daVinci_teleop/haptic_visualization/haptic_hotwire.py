@@ -3,10 +3,14 @@ import rclpy
 from rclpy.node import Node
 import math
 from visualization_msgs.msg import Marker
-from geometry_msgs.msg import PoseStamped, Vector3, Point
+from geometry_msgs.msg import PoseStamped, Point
 from haply_msgs.msg import HaplyState, HaplyControl
 from sensor_msgs.msg import JointState
 from std_msgs.msg import Bool, String
+from haply_daVinci_teleop.coordinate_transforms import (
+    haply_vector_to_psm,
+    psm_vector_to_haply_msg,
+)
 
 class HotWire(Node):
     """Visualizes a straight wire (cylinder) for the Hot Wire experiment"""
@@ -86,6 +90,7 @@ class HotWire(Node):
         self.current_trial_state = None
 
         self.current_psm_cp = None
+        self.velocity = [0.0, 0.0, 0.0]
         self.closest_distance = 999
         self.closest_wire_segment_vector = None
         self.get_logger().info(f"Hot Wire Visualization started. Waiting for measuring points...")
@@ -148,7 +153,7 @@ class HotWire(Node):
                 self.get_logger().info(f"Added point {len(self.wire_points)} / {self.current_psm_cp}")
 
         self.last_button_c = current_button_state
-        self.velocity = [msg.velocity.x, msg.velocity.y, -msg.velocity.z]
+        self.velocity = haply_vector_to_psm(msg.velocity)
         #self.get_logger().info(f"velocity: x={self.velocity[0]:.3f}, y={self.velocity[1]:.3f}, z={self.velocity[2]:.3f}")
 
     # -------------------------------------------------------------------------
@@ -167,11 +172,7 @@ class HotWire(Node):
 
         control_msg = HaplyControl()
         control_msg.use_position = False  
-        control_msg.force = Vector3(
-            x=force_vector[0],
-            y=force_vector[1],
-            z=-force_vector[2]
-        )
+        control_msg.force = psm_vector_to_haply_msg(force_vector)
         control_msg.target_position = Point(x=0.0, y=0.0, z=0.0)
 
         self.force_publisher.publish(control_msg)
@@ -450,4 +451,3 @@ def main(args=None):
 
 if __name__ == "__main__":
     main()
-

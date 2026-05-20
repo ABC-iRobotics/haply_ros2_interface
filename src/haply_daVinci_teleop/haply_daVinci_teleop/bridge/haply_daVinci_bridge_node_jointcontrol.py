@@ -8,6 +8,10 @@ from sensor_msgs.msg import JointState
 import crtk
 import PyKDL # type: ignore
 import math
+from haply_daVinci_teleop.coordinate_transforms import (
+    haply_rotation_delta_to_psm,
+    haply_translation_delta_to_psm,
+)
 
 """ 
 This script defines a bridge node to map Haply device states to daVinci joint commands using CRTK. 
@@ -265,13 +269,18 @@ class HaplyToDaVinciBridge(Node):
         target_joints = self.calibrated_daVinci_joints.copy()
 
         try:
-            target_joints[self.daVinci_x_index] -= dx * 10.0  
-            target_joints[self.daVinci_y_index] += dy * 10.0
-            target_joints[self.daVinci_z_index] -= dz * 1.0
+            psm_dx, psm_dy, psm_dz = haply_translation_delta_to_psm(dx, dy, dz)
+            psm_droll, psm_dpitch, psm_dyaw = haply_rotation_delta_to_psm(
+                droll, dpitch, dyaw
+            )
 
-            target_joints[self.daVinci_pitch_index] -= dyaw
-            target_joints[self.daVinci_yaw_index]   += droll
-            target_joints[self.daVinci_roll_index]  += dpitch
+            target_joints[self.daVinci_x_index] += psm_dx * 10.0
+            target_joints[self.daVinci_y_index] += psm_dy * 10.0
+            target_joints[self.daVinci_z_index] += psm_dz * 1.0
+
+            target_joints[self.daVinci_roll_index] += psm_droll
+            target_joints[self.daVinci_pitch_index] += psm_dpitch
+            target_joints[self.daVinci_yaw_index] += psm_dyaw
 
         except IndexError:
             self.get_logger().error(

@@ -7,6 +7,7 @@ from geometry_msgs.msg import PoseStamped
 import crtk
 import PyKDL # type: ignore
 import math
+from haply_daVinci_teleop.coordinate_transforms import haply_translation_delta_to_psm
 
 class JawOps:
     def __init__(self, arm_ral, connection_timeout=10.0):
@@ -165,9 +166,10 @@ class HaplyToDaVinciBridge(Node):
         
         # calculate target position based on difference between current and reference position
         target_daVinci_pose = PyKDL.Frame(self.calibrated_daVinci_pose)
-        target_daVinci_pose.p[0] -= dx
-        target_daVinci_pose.p[1] += dy
-        target_daVinci_pose.p[2] -= dz
+        psm_dx, psm_dy, psm_dz = haply_translation_delta_to_psm(dx, dy, dz)
+        target_daVinci_pose.p[0] += psm_dx
+        target_daVinci_pose.p[1] += psm_dy
+        target_daVinci_pose.p[2] += psm_dz
 
         # get current orientation as RPY, add deltas, set new rotation
         calibrated_Rotation = target_daVinci_pose.M
@@ -207,5 +209,4 @@ def main(args=None):
 
 if __name__ == "__main__":
     main()
-
 
