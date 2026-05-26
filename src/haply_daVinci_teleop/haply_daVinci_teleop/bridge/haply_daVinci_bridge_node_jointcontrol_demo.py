@@ -38,7 +38,7 @@ class HaplyToDaVinciBridgeDemo(HaplyToDaVinciBridge):
             )
 
             target_joints[self.daVinci_x_index] += psm_dx * 10.0
-            target_joints[self.daVinci_y_index] += psm_dy * 1.0
+            target_joints[self.daVinci_y_index] += psm_dy * 10.0
             target_joints[self.daVinci_z_index] += psm_dz * 1.0
 
             target_joints[self.daVinci_roll_index] += psm_droll
