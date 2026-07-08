@@ -214,4 +214,24 @@ This package includes the **STL files** used for 3D visualization of the Handle 
 ### `haply_msgs`  
 This package defines the **custom ROS2 message types** used by the ROS2 interface.
 
+## Acknowledgements
+
+This work is related to the **MedLaBotX project** (2024-1.2.3-HU-RIZONT-00069). The project has been implemented with support provided by the Ministry of Culture and Innovation of Hungary from the National Research, Development, and Innovation Fund, financed under the 2024-1.2.3-HU-RIZONT funding scheme.
+
+---
+
+## Citation
+
+If you use this code in your research, please cite our paper:
+
+```bibtex
+@article{varga2025haptic,
+  title={Haptic Shared Control for Surgical Teleoperation: Integrating Haply Inverse3 with the da Vinci Research Kit},
+  author={Varga, Balint and Fritz, Sebastian and Kiss, Gergely and Takacs, Kristof and Galambos, Peter},
+  journal={IEEE Transactions on Haptics},
+  year={2025},
+  note={Submitted},
+  affiliation={Institute of Control Systems, Karlsruhe Institute of Technology, Germany; Antal Bejczy Center for Intelligent Robotics, Óbuda University, Budapest, Hungary}
+}
+
 
