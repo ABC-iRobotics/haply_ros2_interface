@@ -20,7 +20,7 @@ class HaplyDriverNode(Node):
 
         # Parameters
         self.declare_parameter("frequency", 200.0)
-        self.declare_parameter("max_force", 10.0)   # Maximum allowed force in N
+        self.declare_parameter("max_force", 1.2)   # Maximum allowed force in N
         self.frequency = self.get_parameter("frequency").value
         self.max_force = float(self.get_parameter("max_force").value)
 
@@ -291,9 +291,9 @@ class HaplyDriverNode(Node):
                         }
                         await ws.send(orjson.dumps(request))
 
-                    # If both devices missing for > 200s, shutdown
+                    # If both devices missing for > 50s, shutdown
                     if not self.inverse_available and not self.handle_available:
-                        if (time.perf_counter() - self.last_device_seen_time) > 200:
+                        if (time.perf_counter() - self.last_device_seen_time) > 50:
                             self.get_logger().warn("No devices available. Shutting down node.")
                             self.run = False
                             rclpy.shutdown()
