@@ -226,11 +226,11 @@ If you use this code in your research, please cite our paper:
 
 ```bibtex
 @article{varga2025haptic,
-  title={Haptic Shared Control for Surgical Teleoperation: Integrating Haply Inverse3 with the da Vinci Research Kit},
+  title={n Open-Source ROS2 Framework for Shared Control in Surgical Teleoperation: Integrating the Haply Inverse3 with the da Vinci Research Kit},
   author={Varga, Balint and Fritz, Sebastian and Kiss, Gergely and Takacs, Kristof and Galambos, Peter},
   journal={IEEE Transactions on Haptics},
   year={2025},
-  note={Submitted},
+  note={Submitted, in Revision},
   affiliation={Institute of Control Systems, Karlsruhe Institute of Technology, Germany; Antal Bejczy Center for Intelligent Robotics, Óbuda University, Budapest, Hungary}
 }
 
